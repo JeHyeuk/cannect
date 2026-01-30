@@ -588,7 +588,7 @@ CHANNEL     : {db[f'{self.hw} Channel']}-CAN
             self.logger(f'>>> ... NO EXCEPTION FOUND')
         return
 
-    def create(self, path:str=''):
+    def generate(self, path:str=''):
 
         # BASE 모델의 기본 정보들을 CANDiag으로 복사
         self.logger('>>> COPY BASE MODEL TO TEMPLATE')
@@ -686,7 +686,7 @@ if __name__ == "__main__":
     data = CANDBReader().to_developer_mode("HEV")
 
     template = CANDiag(data, proj["CanFDMCUD_HEV"], "MCU_01_P_10ms", "MCU_01_H_10ms", "MCU_02_P_10ms", "MCU_02_H_10ms", "MCU_03_100ms")
-    template.create()
+    template.generate()
 
 
 

@@ -100,7 +100,7 @@ class ComRx:
             method.find('CodeBlock').text = curr.get(name, "")
         return
 
-    def export(self):
+    def generate(self):
         self.main.export_to_downloads()
         self.impl.export_to_downloads()
         self.data.export_to_downloads()
@@ -137,4 +137,4 @@ if __name__ == "__main__":
         # base_model="",
         # base_model=env.ASCET / f"Export/ComRx_G/ComRx_G.main.amd"
     )
-    model.export()
+    model.generate()

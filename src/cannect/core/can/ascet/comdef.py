@@ -77,7 +77,7 @@ class ComDef:
         logger.end(">>> Defining Signal Elements...")
         return
 
-    def autorun(self):
+    def generate(self):
         self.main.find('Component/Comment').text = _db2code.INFO(self.db.revision)
         self.define_elements('MethodSignature')
         self.define_elements('Element')
@@ -246,7 +246,7 @@ if __name__ == "__main__":
     #     # base_model=r'D:\SVN\model\ascet\trunk\HNB_GASOLINE\_29_CommunicationVehicle\StandardDB\NetworkDefinition\ComDef\ComDef-22368\ComDef.main.amd'
     #     # base_model=ENV['ASCET_EXPORT_PATH']
     # )
-    # model.autorun()
+    # model.generate()
 
     model = ComDef(
         db=db,
@@ -254,4 +254,4 @@ if __name__ == "__main__":
         exclude_tsw=True,
         # base_model=env.ASCET / f"Export/ComDef_G/ComDef_G.main.amd"
     )
-    model.autorun()
+    model.generate()

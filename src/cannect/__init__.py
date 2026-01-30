@@ -1,4 +1,5 @@
 __all__ = [
+    "env",
     "mount",
 
     # .core
@@ -17,7 +18,7 @@ __all__ = [
     "DataDictionary",
 ]
 
-from cannect.config import mount
+from cannect.config import env, mount
 from cannect.core import ascet as Ascet
 from cannect.core.can import AscetCAN, DataBaseCAN
 from cannect.core.ir import IntegrationRequest, ChangeHistoryManager
