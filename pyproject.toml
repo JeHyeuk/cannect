@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cannect"
+version = "1.0.0"
+description = "HYUNDAI-KEFICO EMS/ASW CONVENIENCE TOOL"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "kaleido",
+    "lxml",
+    "mdfreader",
+    "numpy",
+    "pandas",
+    "plotly",
+    "psutil",
+    "pyautogui",
+    "pygetwindow",
+    "pyperclip",
+    "python-can",
+    "python-docx",
+    "python-dotenv",
+    "python-pptx",
+    "pywin32",
+    "tqdm",
+    "xlsxwriter"
+]
