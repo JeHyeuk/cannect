@@ -55,7 +55,7 @@ def mount(svn_path=None):
         E.get('USERDOMAIN', '') == 'HKEFICO' and
         E.get('USERDOMAIN_ROAMINGPROFILE', '') == 'HKEFICO'
     ):
-        raise PermissionError(f'USER: {e.get("USERNAME")} NOT AUTHORIZED')
+        raise PermissionError(f'USER: {E.get("USERNAME")} NOT AUTHORIZED')
 
     # 전역 환경 변수 설정
     E.DOWNLOADS   = E.USERPROFILE / 'Downloads'
@@ -65,7 +65,7 @@ def mount(svn_path=None):
     E.SVN_CONF    = svn_path / 'GSL_Build/1_AswCode_SVN/PostAppSW/0_XML/DEM_Rename'
     E.SVN_HISTORY = svn_path / 'GSL_Release/4_SW변경이력'
     E.SVN_IR      = svn_path / 'GSL_Build/8_IntegrationRequest'
-    E.SVN_MODEL   = svn_path / 'model/ascet/trunk'
+    E.SVN_MODEL   = svn_path / 'model'
     E.SVN_UNECE   = svn_path / 'Autron_CoWork/사이버보안/Module_Test_Results'
     E.SVN_SDD     = svn_path / 'GSL_Build/7_Notes'
     for p in psutil.disk_partitions():
@@ -79,26 +79,8 @@ def mount(svn_path=None):
         if key.startswith("SVN"):
             if not path.exists():
                 raise InternalServerError(f"{{{path}}} NOT EXIST IN {E.COMPANY} SERVER")
-            
-    # 접근 권한 2차 확인; SVN 권한 확인
-    for path in [
-        E.SVN_CAN,
-        E.SVN_CONF,
-        E.SVN_HISTORY,
-        E.SVN_IR,
-        E.SVN_MODEL,
-        E.SVN_UNECE,
-        E.SVN_SDD
-    ]:
-        if not (path / ".svn").is_dir():
-            raise InternalServerError(f"{{{path}}} IS NOT LINKED TO SVN")
-    return
 
-# Initialize
-if E.USERNAME == '22011148':
-    mount(svn_path=Path(r"E:\SVN"))
-else:
-    mount()
+    return
 
 
 if __name__ == "__main__":

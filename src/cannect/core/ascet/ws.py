@@ -1,4 +1,4 @@
-from cannect.core.ascet import AmdIO, AmdSC
+from cannect.core.ascet.amd import AmdIO, AmdSC
 from cannect.core.subversion import Subversion
 from cannect.config import env
 from cannect.errors import AscetWorspaceFormatError, AmdDuplicationError, AmdNotFoundError
@@ -12,19 +12,22 @@ class WorkspaceIO:
 
     def __init__(self, path:str=""):
         self.path = path = env.SVN_MODEL if not path else Path(path)
+        if path != env.SVN_MODEL:
+            listdir = os.listdir(path)
+            if not "HNB_GASOLINE" in listdir:
+                raise AscetWorspaceFormatError('NO {HNB_GASOLINE} IN WORKSPACE DIRECTORY')
+            if not "HMC_ECU_Library" in listdir:
+                raise AscetWorspaceFormatError('NO {HMC_ECU_Library} IN WORKSPACE DIRECTORY')
 
-        listdir = os.listdir(path)
-        if not "HNB_GASOLINE" in listdir:
-            raise AscetWorspaceFormatError('NO {HNB_GASOLINE} IN WORKSPACE DIRECTORY')
-        if not "HMC_ECU_Library" in listdir:
-            raise AscetWorspaceFormatError('NO {HMC_ECU_Library} IN WORKSPACE DIRECTORY')
-
-        fdb = ''
-        if '.svn' in listdir:
-            fdb = Path(path) / '.svn/wc.db'
-        for f in listdir:
-            if f.endswith('.aws'):
-                fdb = Path(path) / f
+        if path == env.SVN_MODEL:
+            fdb = r'\\kefico\keti\ENT\SDT\SVN\model\.svn\wc.db'
+        else:
+            fdb = ''
+            if '.svn' in listdir:
+                fdb = Path(path) / '.svn/wc.db'
+            for f in listdir:
+                if f.endswith('.aws'):
+                    fdb = Path(path) / f
 
         if not fdb:
             raise AscetWorspaceFormatError('NO .aws OR wc.db IN WORKSPACE DIRECTORY')
@@ -145,6 +148,7 @@ if __name__ == "__main__":
 
 
     io = WorkspaceIO()
+    print(io.db)
     print(io["CanHSFPCMD"])
     # print(io.bcPath(33))
     # print(io.bcTree(33))

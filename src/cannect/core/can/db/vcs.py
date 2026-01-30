@@ -3,6 +3,7 @@ from cannect.core.can.db.schema import standardize
 from cannect.core.subversion import Subversion
 from cannect.errors import CANDBError
 from cannect.utils.excel import ComExcel
+from cannect.utils.tools import path_abbreviate
 
 from datetime import datetime
 from pandas import DataFrame
@@ -86,7 +87,7 @@ class CANDBVcs:
         source.to_json(jsonpath, orient='index')
         if not self.silence:
             self.logger("Manually Updated CAN DB from clipboard.")
-            self.logger(f"- Saved as : {jsonpath}")
+            self.logger(f"- Saved as : {path_abbreviate(jsonpath)}")
         return
 
     # def commit_json(self):

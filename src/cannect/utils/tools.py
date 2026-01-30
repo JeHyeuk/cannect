@@ -18,8 +18,8 @@ def unzip(src: Union[str, Path], to: Union[str, Path] = "") -> bool:
         os.makedirs(to, exist_ok=True)
 
     src = str(src)
-    if not os.path.isfile(src):
-        raise KeyError(f"src: {src}는 경로가 포함된 파일(Full-Directory)이어야 합니다.")
+    # if not os.path.isfile(src):
+    #     raise KeyError(f"src: {src}는 경로가 포함된 파일(Full-Directory)이어야 합니다.")
     if src.endswith('.zip'):
         zip_obj = zipfile.ZipFile(src)
         zip_obj.extractall(to)

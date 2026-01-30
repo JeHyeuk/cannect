@@ -13,8 +13,7 @@ from xml.etree.ElementTree import Element
 import math
 
 
-F = formula_dictionary(env.SVN_CAN / "CAN_Model/Formula/HNB_I4GDI_I4MPI.xml")
-
+F = None
 def elementWrapper(**kwargs) -> DataDictionary:
     return DataDictionary(
         kwargs=DataDictionary(**kwargs),
@@ -71,6 +70,10 @@ def crcClassElement(n:Union[int, str], oid_tag:Optional[Dict[str, str]]=None) ->
 
 
 def SignalElement(signal:CanSignal, oid_tag:Optional[Dict[str, str]]=None) -> DataDictionary:
+    global F
+    if F is None:
+        F = formula_dictionary(env.SVN_CAN / "CAN_Model/Formula/HNB_I4GDI_I4MPI.xml")
+
     if not oid_tag:
         oid_tag = {}
     kwargs = DataDictionary()

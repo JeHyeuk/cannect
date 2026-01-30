@@ -1,6 +1,7 @@
 from cannect.config import env
 from cannect.core.ascet.amd import Amd
 from cannect.core.ascet.oid import generateOID
+from cannect.core.ascet.ws import WorkspaceIO
 from cannect.core.can.db.reader import CANDBReader
 from cannect.core.can.ascet._db2code import INFO
 from cannect.core.can.rule import naming
@@ -25,7 +26,7 @@ class CANDiag(Amd):
         template = env.SVN_CAN / "CAN_Model/_29_CommunicationVehicle/StandardDB/StandardTemplate/CANDiagTmplt/CANDiagTmplt.main.amd"
         super().__init__(str(template))
 
-        self.dsm = env.SVN_MODEL / "HMC_ECU_Library/HMC_DiagLibrary/DSM_Types"
+        self.ws = WorkspaceIO()
 
         # LOGGER 생성
         base = Amd(src)
@@ -481,9 +482,9 @@ CHANNEL     : {db[f'{self.hw} Channel']}-CAN
         return
 
     def copy_dsm(self):
-        fid_md = Amd(os.path.join(self.dsm, "Fid_Typ.zip"))
+        fid_md = Amd(self.ws["Fid_Typ.zip"])
         fid = fid_md.impl.dataframe("ImplementationSet", depth="shallow").set_index("name")["OID"]
-        deve_md = Amd(os.path.join(self.dsm, "DEve_Typ.zip"))
+        deve_md = Amd(self.ws["DEve_Typ.zip"])
         deve = deve_md.impl.dataframe("ImplementationSet", depth="shallow").set_index("name")["OID"]
 
         for elem in self.impl.iter('ElementImplementation'):
@@ -684,7 +685,7 @@ if __name__ == "__main__":
     proj = WorkspaceIO()
     data = CANDBReader().to_developer_mode("HEV")
 
-    template = CANDiag(data, proj["CanFDMCU_HEV"], "MCU_01_P_10ms", "MCU_01_H_10ms", "MCU_02_P_10ms", "MCU_02_H_10ms")
+    template = CANDiag(data, proj["CanFDMCUD_HEV"], "MCU_01_P_10ms", "MCU_01_H_10ms", "MCU_02_P_10ms", "MCU_02_H_10ms", "MCU_03_100ms")
     template.create()
 
 

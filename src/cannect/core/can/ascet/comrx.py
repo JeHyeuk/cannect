@@ -1,5 +1,6 @@
 from cannect.config import env
 from cannect.core.ascet.amd import Amd
+from cannect.core.ascet.ws import WorkspaceIO
 from cannect.core.can.ascet._db2code import MessageCode
 from cannect.core.can.db.reader import CANDBReader
 from cannect.utils.logger import Logger
@@ -29,7 +30,7 @@ class ComRx:
             name = os.path.basename(base_model).split(".")[0]
         else:
             name = f"ComRx{'_HEV' if engine_spec == 'HEV' else ''}"
-            base_model = env.SVN_MODEL / rf'HNB_GASOLINE/_29_CommunicationVehicle/StandardDB/MessageInterface/MessageReceive/{name}/{name}.zip'
+            base_model = WorkspaceIO()[name]
         host = name.replace("Rx", "Def")
 
         # 공용 속성 생성
