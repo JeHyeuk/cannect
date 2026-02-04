@@ -13,6 +13,12 @@ class AscetWorspaceFormatError(Exception):
 class CANDBError(Exception):
     pass
 
+class CANDBDuplicationError(Exception):
+    pass
+
+class CANDBMessageNotFound(Exception):
+    pass
+
 class InternalServerError(Exception):
     pass
 

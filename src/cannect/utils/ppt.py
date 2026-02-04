@@ -52,9 +52,7 @@ class PptRW:
         cls.app.Visible = True
         return super().__new__(cls)
 
-    def __init__(self, path:str, logger=None):
-        if logger is not None:
-            logger.log(f'[WRITE PPT ON "{os.path.basename(path)}"]')
+    def __init__(self, path:str):
         if self.app.Presentations.Count > 0:
             for n in range(1, self.app.Presentations.Count + 1):
                 _ppt = self.app.Presentations.Item(n)
@@ -62,7 +60,6 @@ class PptRW:
                     self.ppt = _ppt
                     return
         self.ppt = self.app.Presentations.Open(path)
-        self.log = logger
         return
 
     def __iter__(self) -> Generator[win32.CDispatch, None, None]:

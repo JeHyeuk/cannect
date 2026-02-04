@@ -27,6 +27,9 @@ class CANDBVcs:
     def __init__(self, filename:str=''):
         if not filename:
             filename = "자체제어기_KEFICO-EMS_CANFD.xlsx"
+        if not filename.endswith('.xlsx'):
+            filename += '.xlsx'
+
         filepath = env.SVN_CANDB / filename
         if not filepath.exists():
             raise CANDBError(f'{filename} NOT EXISTS')
@@ -90,9 +93,11 @@ class CANDBVcs:
             self.logger(f"- Saved as : {path_abbreviate(jsonpath)}")
         return
 
-    # def commit_json(self):
-    #     Subversion.commit(self.json, message="[CANNECT] AUTO-COMMIT CAN JSON DB")
-    #     return
+    def commit_json(self):
+        # TODO
+        Subversion.add(self.json)
+        Subversion.commit(self.json, message=f"[CANNECT] AUTO-COMMIT CAN JSON - {self.revision}")
+        return
 
 if __name__ == "__main__":
     from pandas import set_option
@@ -100,6 +105,8 @@ if __name__ == "__main__":
 
     cdb = CANDBVcs()
     # cdb = CANDBVcs(r"G-PROJECT_KEFICO-EMS_CANFD.xlsx")
+    # print(cdb.revision)
     cdb.to_json()
     print(cdb.json)
+
     # cdb.commit_json()

@@ -61,7 +61,7 @@ class AmdDiff:
     @property
     def added(self) -> List[str]:
         if self.is_equal:
-            return self.post_elem['name'].tolist()
+            return []
         return list(set(self.post_elem['name']) - set(self.prev_elem['name']))
 
     @property
@@ -91,7 +91,9 @@ if __name__ == "__main__":
     set_option('display.expand_frame_repr', False)
 
     diff = AmdDiff(
-        r"D:\Archive\00_프로젝트\2017 통신개발-\2025\DS1201 IUMPR 미표출 ICE CANFD\02_Model\Prev\CanBMSD_48V.main.amd",
-        r"D:\Archive\00_프로젝트\2017 통신개발-\2025\DS1201 IUMPR 미표출 ICE CANFD\02_Model\Post\CanBMSD_48V\CanBMSD_48V.main.amd",
+        r"D:\Archive\00_프로젝트\2017 통신개발-\2026\test\04_Model\Prev\ComDef_HEV.main.amd",
+        r"D:\Archive\00_프로젝트\2017 통신개발-\2026\test\04_Model\Post\ComDef_HEV-22550\ComDef_HEV.main.amd",
     )
-    print(diff.added_parameters)
+    # print(diff.added_parameters)
+    print(diff.added)
+    print(len(diff.added))

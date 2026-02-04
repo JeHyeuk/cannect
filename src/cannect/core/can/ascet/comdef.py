@@ -58,7 +58,7 @@ class ComDef:
         변경 전 모델 요소 수집
         """
         logger.info(">>> Collecting Base Model Properties... 0.01s")
-        prev = self.collect_properties()
+        prev = self._collect_properties()
         oids = dict(zip(prev.Elements['name'], prev.Elements.index))
         oids.update(dict(zip(prev.MethodSignature['name'], prev.MethodSignature.index)))
         self.prev = prev
@@ -79,15 +79,15 @@ class ComDef:
 
     def generate(self):
         self.main.find('Component/Comment').text = _db2code.INFO(self.db.revision)
-        self.define_elements('MethodSignature')
-        self.define_elements('Element')
-        self.define_elements('ImplementationEntry')
-        self.define_elements('DataEntry')
-        self.define_elements('HeaderBlock')
-        self.define_elements('MethodBody')
-        self.export()
+        self._define_elements('MethodSignature')
+        self._define_elements('Element')
+        self._define_elements('ImplementationEntry')
+        self._define_elements('DataEntry')
+        self._define_elements('HeaderBlock')
+        self._define_elements('MethodBody')
+        self._export()
 
-        curr = self.collect_properties()
+        curr = self._collect_properties()
         deleted = list(set(self.prev.Elements['name']) - set(curr.Elements['name']))
         added = list(set(curr.Elements['name']) - set(self.prev.Elements['name']))
         desc = DataFrame(
@@ -105,7 +105,7 @@ class ComDef:
                          f'* Deleted: {", ".join(deleted)}')
         return
 
-    def collect_properties(self) -> DataDictionary:
+    def _collect_properties(self) -> DataDictionary:
         mainE = self.main.dataframe('Element').set_index(keys='OID').copy()
         implE = self.impl.dataframe('ImplementationEntry').set_index(keys='elementOID').copy()
         dataE = self.data.dataframe('DataEntry').set_index(keys='elementOID').copy()
@@ -118,7 +118,7 @@ class ComDef:
             Elements=mainE.join(implE).join(dataE)
         )
 
-    def parents(self, tag:str) -> Union[Any, Tuple]:
+    def _find_parents(self, tag:str) -> Union[Any, Tuple]:
         if tag == "MethodSignature":
             return self.main.find('Component/MethodSignatures'), None
         if tag == "Element":
@@ -135,7 +135,7 @@ class ComDef:
                    self.spec.strictFind('CodeVariant', target="PC").find('HeaderBlock')
         raise AttributeError
 
-    def define_elements(self, tag:str):
+    def _define_elements(self, tag:str):
         """
         {tag}에 해당하는 AmdIO를 찾는다.
         {tag}에 해당하는 AmdIO의 부모 tag를 찾는다.
@@ -145,7 +145,7 @@ class ComDef:
         :param tag:
         :return:
         """
-        pGlob, pLoc = self.parents(tag)
+        pGlob, pLoc = self._find_parents(tag)
         for child in list(pGlob):
             pGlob.remove(child)
         if pLoc is not None:
@@ -204,7 +204,7 @@ class ComDef:
         parent.append(getattr(_db2elem.crcClassElement(8, self.oids), tag))
         return
 
-    def export(self):
+    def _export(self):
         self.main.export_to_downloads()
         self.impl.export_to_downloads()
         self.data.export_to_downloads()

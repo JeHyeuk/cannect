@@ -82,6 +82,24 @@ class IntegrationRequest:
         return getattr(self.table, '_repr_html_')()
 
     @property
+    def ChangeHistory(self) -> str:
+        return self._change_history
+
+    @ChangeHistory.setter
+    def ChangeHistory(self, change: str):
+        self.table["ChangeHistoryName"] = change
+        self._change_history = change
+
+    @property
+    def Comment(self) -> str:
+        return self._comment
+
+    @Comment.setter
+    def Comment(self, comment: str):
+        self.table["Comment"] = comment
+        self._comment = comment
+
+    @property
     def deliverables(self) -> Deliverables:
         """
         산출물 경로
@@ -100,15 +118,6 @@ class IntegrationRequest:
         return self._parameters
 
     @property
-    def Comment(self) -> str:
-        return self._comment
-
-    @Comment.setter
-    def Comment(self, comment: str):
-        self.table["Comment"] = comment
-        self._comment = comment
-
-    @property
     def User(self) -> str:
         return self._user
 
@@ -116,15 +125,6 @@ class IntegrationRequest:
     def User(self, user: str):
         self.table["User"] = user
         self._user = user
-
-    @property
-    def ChangeHistory(self) -> str:
-        return self._change_history
-
-    @ChangeHistory.setter
-    def ChangeHistory(self, change: str):
-        self.table["ChangeHistoryName"] = change
-        self._change_history = change
 
     @staticmethod
     def _column_selector(key: str) -> str:
@@ -153,7 +153,7 @@ class IntegrationRequest:
             Subversion.commit(self.ws[f'{name}.zip'], message)
         return
 
-    def compare_model(self, prev: str = '', post: str = '', exclude_imported: bool = True):
+    def compare_model(self, prev: str = '', post: str = '', exclude_imported: bool = False):
         self.logger("[COMPARE ELEMENTS]")
         if not prev:
             prev = self.deliverables.Model / "Prev"
@@ -170,7 +170,7 @@ class IntegrationRequest:
                 dat = Amd(post_amd).data.dataframe('DataEntry')
                 self.table.loc[n, 'ElementAdded'] = ", ".join(amd["name"])
                 self.logger(
-                    f">>> %{name: <{self._space}}: NEW ELEMENT  / ADDED ={len(amd): >3}")
+                    f">>> %{name: <{self._space}}: NEW ELEMENT  / ADDED = {len(amd): >3}")
                 params = AmdDiff.parameters2table(amd, dat)
                 if not params.empty:
                     self._parameters.append(params)
@@ -182,7 +182,7 @@ class IntegrationRequest:
             if not params.empty:
                 self._parameters.append(params)
 
-            self.logger(f">>> %{name: <{self._space}}: DELETED ={len(diff.deleted): >3} / ADDED ={len(diff.added): >3}")
+            self.logger(f">>> %{name: <{self._space}}: DELETED = {len(diff.deleted): >3} / ADDED = {len(diff.added): >3}")
         return
 
     def copy_model_to_svn(
@@ -295,6 +295,9 @@ class IntegrationRequest:
         self.p_table.reset_index(inplace=True)
         return
 
+    def is_previous_svn_version_selected(self):
+        return self.deliverables is not None and os.listdir(self.deliverables.Model / "Prev")
+
     def resolve_model(self, model: str):
         """
         모델 정보를 @self.table에 추가 (SVN Revision 제외)
@@ -396,9 +399,9 @@ class IntegrationRequest:
             tools.clear(temp, leave_path=True)
         return
 
-    def select_previous_svn_version(self, mode: str = 'auto'):
+    def select_previous_svn_version(self, mode: str = 'latest'):
         """
-        @mode: [str] {'auto', 'latest', 'select'}
+        @mode: [str] {'previous', 'latest', 'select'}
         """
         # 산출물 경로가 존재하는 경우 모델 과거 버전 조회 이력 확인 후 재 사용
         if self.deliverables is not None and os.listdir(self.deliverables.Model / "Prev"):
@@ -416,14 +419,14 @@ class IntegrationRequest:
                     self.p_table.loc[n, "SCMRev"] = '-'
             return
 
-        if not mode.lower() in ['auto', 'latest']:
+        if not mode.lower() in ['previous', 'latest']:
             self.logger(f'[SELECT PREVIOUS MODEL VERSION]')
         for n, row in enumerate(self):
             file = self.ws[row["FunctionName"]]
             history = Subversion.log(file)
-            if mode.lower() in ['auto', 'latest']:
+            if mode.lower() in ['previous', 'latest']:
                 try:
-                    i = 1 if mode.lower() == 'auto' else 0
+                    i = 1 if mode.lower() == 'previous' else 0
                     self.p_table.loc[n, "SCMRev"] = rev = history["revision"].values[i][1:]
                     if self.deliverables is not None:
                         Subversion.save_revision_to(file, rev, self.deliverables.Model / "Prev")
@@ -521,8 +524,8 @@ class IntegrationRequest:
     #     # TODO
     #     return
 
-    def to_clipboard(self, **kwargs):
-        return self.table[SCHEMA].to_clipboard(**kwargs)
+    def to_clipboard(self):
+        return self.table[SCHEMA].to_clipboard(index=False)
 
 
 if __name__ == "__main__":
@@ -536,14 +539,13 @@ if __name__ == "__main__":
         # r"E:\TEMP\CanCNG\CanCNG.main.amd",  # 신규 모델은 전체 경로 사용
         # r"E:\TEMP\CanEMS_CNG\CanEMS_CNG.main.amd", # 신규 모델은 전체 경로 사용
         # r"E:\TEMP\CanEMSM_CNG\CanEMSM_CNG.main.amd",  # 신규 모델은 전체 경로 사용
-        "CanCVVDD",
-        "CanNOXD"
+        "ComDef_HEV", "ComRx_HEV", "CanFDMCUD_HEV", "CanFDMCUM_HEV", "LogIf_HEV"
     )
-    ir.deliverables = r'D:\Archive\00_프로젝트\2017 통신개발-\2026\DS0119 CR10787034 DTC별 IUMPR 표출 조건 변경 HEV'
-    ir.User = "이제혁"
-    ir.Comment = "VCDM CR10787034 HEV/CANFD DTC별 IUMPR 표출 조건 변경"
+    ir.deliverables = env.DOWNLOADS / 'test'
+    # ir.User = "이제혁"
+    # ir.Comment = "VCDM CR10787034 HEV/CANFD DTC별 IUMPR 표출 조건 변경"
     # ir.select_previous_svn_version(mode='select')
-    # ir.select_previous_svn_version(mode='latest')
+    ir.select_previous_svn_version(mode='latest')
 
     # POST-ACTION
     # ir.update_sdd(comment=ir.Comment)
@@ -555,9 +557,9 @@ if __name__ == "__main__":
     # ir.commit_sdd(log='') # TODO
 
     # ir.resolve_svn_version('POLYSPACE')
-    # ir.resolve_svn_version()
-    # ir.resolve_sdd_version()
-    # ir.compare_model(prev='', post='', exclude_imported=False)
+    ir.resolve_svn_version()
+    ir.resolve_sdd_version()
+    ir.compare_model(prev='', post='', exclude_imported=False)
 
     # 변경내역서 작성
     # ppt = ChangeHistoryManager(
@@ -578,4 +580,4 @@ if __name__ == "__main__":
     # ppt.parameters             = ir.parameters  # .compare_model()의 후행
 
     print(ir)
-    # ir.to_clipboard(index=False)
+    # ir.to_clipboard()

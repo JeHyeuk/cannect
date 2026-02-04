@@ -14,6 +14,31 @@ class Subversion:
     silence:bool     = False
 
     @classmethod
+    def add(cls, path:Union[str, Path]):
+        post = False
+        drive = "Z:"
+        if str(path).startswith("\\\\"):
+            post = True
+            anchor = Path(path).anchor
+            subprocess.run(["net", "use", drive, "/delete", "/y"], capture_output=True)
+            subprocess.run(["net", "use", drive, anchor], check=True)
+            path = Path(drive) / "\\" / Path(path).relative_to(anchor)
+
+        result = subprocess.run(
+            ["svn", "add", str(path), '--force'],
+            shell=True,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        if post:
+            subprocess.run(["net", "use", drive, "/delete", "/y"], capture_output=True)
+        if not cls.silence:
+            cls.logger("Add successful!")
+            cls.logger(result.stdout)
+        return
+
+    @classmethod
     def read_wcdb(cls, path:Union[Path,str]) -> DataFrame:
         conn = sqlite3.connect(path)
         data = pd.read_sql_query('SELECT * FROM NODES', conn)

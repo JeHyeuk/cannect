@@ -55,8 +55,8 @@ class ComRx:
             method.attrib['methodName']: method.find('CodeBlock').text
             for method in list(spec.strictFind('CodeVariant', target="G_HMCEMS").find('MethodBodies'))
         }
-        curr = self.code_generation(host)
-        self.spec_update(curr)
+        curr = self._code_generation(host)
+        self._spec_update(curr)
 
         summary_prev = MessageCode.method_contains_message(prev)
         summary_curr = MessageCode.method_contains_message(curr)
@@ -76,7 +76,7 @@ class ComRx:
                          f'* Deleted: {", ".join(deleted)}')
         return
 
-    def code_generation(self, host:str) -> Dict[str, str]:
+    def _code_generation(self, host:str) -> Dict[str, str]:
         context = {}
         for name, obj in self.db.messages.items():
             period = 40 if "E" in obj["Send Type"] else obj["Cycle Time"]
@@ -93,7 +93,7 @@ class ComRx:
                 context[key] += code.to_rx(host)
         return context
 
-    def spec_update(self, curr:Dict[str, str]):
+    def _spec_update(self, curr:Dict[str, str]):
         parent = self.spec.strictFind('CodeVariant', target="G_HMCEMS").find('MethodBodies')
         for method in list(parent):
             name = method.attrib['methodName']

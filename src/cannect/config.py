@@ -31,7 +31,7 @@ E = ENV = env = DataDictionary(**os.environ)
 E.COMPANY   = "HYUNDAI KEFICO Co.,Ltd."
 E.COPYRIGHT = f'Copyright {E.COMPANY} 2020-{datetime.now().year}. All rights reserved.'
 E.DIVISION  = "ELECTRIFICATION PT CONTROL TEAM 1"
-E.KOREANAME = __namespace__.get(E.USERNAME, '알 수 없음')
+E.USER = __namespace__.get(E.USERNAME, '알 수 없음')
 
 
 def mount(svn_path=None):
@@ -79,12 +79,11 @@ def mount(svn_path=None):
         if key.startswith("SVN"):
             if not path.exists():
                 raise InternalServerError(f"{{{path}}} NOT EXIST IN {E.COMPANY} SERVER")
-
     return
 
 
 if __name__ == "__main__":
-    print(env.KOREANAME)
+    print(env.USER)
     print(env.TEMP)
     print(env.USERPROFILE / 'Downloads')
     print(env.SVN)

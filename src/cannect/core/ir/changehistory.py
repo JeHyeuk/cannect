@@ -1,4 +1,6 @@
+from cannect.core.ir.ir import IntegrationRequest
 from cannect.utils.ppt import PptRW
+from cannect.utils import tools
 from pandas import DataFrame
 from typing import Iterable, List
 import pygetwindow as gw
@@ -7,6 +9,119 @@ import time
 
 
 class ChangeHistoryManager(PptRW):
+
+    def __init__(self, ir:IntegrationRequest):
+        ir.logger.log(f'[WRITE PPT ON "{tools.path_abbreviate(ir.deliverables.change_history)}"]')
+        if not ir.is_previous_svn_version_selected():
+            ir.logger.log('! WARNING: PREVIOUS MODEL NOT SELECTED')
+
+        super().__init__(ir.deliverables.change_history)
+        self.ir = ir
+
+        ir.logger.log('>>> RESIZING COVER PAGE')
+        self._resize_cover()
+
+        # PAGE OVERVIEW: SET FUNCTION LIST
+        self.set_text_in_table(n_slide=1, n_table=2, cell=(3, 2), text=", ".join(ir.table["FunctionName"]), pos='new')
+        self.set_table_font(n_slide=1, n_table=2, cell=(3, 2), size=10)
+
+        # PAGE MODEL DESCRIPTION:
+        if ir.is_previous_svn_version_selected():
+            ir.logger.log('>>> WRITE ON "SW 기능 상세 설명 - 변경 전"')
+            text = ''
+            for n in ir.p_table.index:
+                text += f'%{ir.p_table.loc[n, "FunctionName"]} <r.{ir.p_table.loc[n, "SCMRev"]}>\x0b\x0b\n'
+            text = text[:-1]
+            self.set_text_in_table(n_slide=2, n_table=1, cell=(2, 1), text=text, pos='new')
+
+        ir.logger.log('>>> WRITE ON "SW 기능 상세 설명 - 변경 후"')
+        text = ''
+        for n in ir.table.index:
+            text += f'%{ir.table.loc[n, "FunctionName"]} <r.{ir.table.loc[n, "SCMRev"]}>\x0b-\x0b\n'
+        text = text[:-1]
+        self.set_text_in_table(n_slide=2, n_table=1, cell=(2, 2), text=text, pos='new')
+
+        # PAGE MODEL DETAILS
+        ir.logger.log('>>> GENERATE SLIDES ')
+        self._set_model_slides()
+
+        if ir.is_previous_svn_version_selected():
+            ir.logger('>>> WRITING PREVIOUS MODEL DETAILS...')
+            for n in ir.p_table.index:
+                name, rev = ir.p_table.loc[n, "FunctionName"], ir.p_table.loc[n, "SCMRev"]
+                ir.logger(f'>>> ... {name} @{rev}')
+                slides = self.get_slide_n(f'{name} ')
+                for slide in slides:
+                    self.replace_text_in_table(
+                        n_slide=slide,
+                        n_table=1,
+                        cell=(1, 1),
+                        prev="Rev.",
+                        post=f"Rev.{rev}"
+                    )
+
+        ir.logger('>>> WRITING REVISED MODEL DETAILS...')
+        for n in ir.table.index:
+            name, rev = ir.table.loc[n, "FunctionName"], ir.table.loc[n, "SCMRev"]
+            ir.logger(f'>>> ... {name} @{rev}')
+            slides = self.get_slide_n(f'{name} ')
+            for slide in slides:
+                self.replace_text_in_table(
+                    n_slide=slide,
+                    n_table=1,
+                    cell=(1, 2),
+                    prev="Rev.",
+                    post=f"Rev.{rev}"
+                )
+            slides = self.get_slide_n(f'{name} / Element')
+            for slide in slides:
+                self.set_text_in_table(
+                    n_slide=slide,
+                    n_table=1,
+                    cell=(3, 1),
+                    text='Element 삭제\x0b' + ir.table.loc[n, "ElementDeleted"],
+                    pos="new"
+                )
+                self.set_text_in_table(
+                    n_slide=slide,
+                    n_table=1,
+                    cell=(3, 2),
+                    text='Element 추가\x0b' + ir.table.loc[n, "ElementAdded"],
+                    pos="new"
+                )
+
+        # WRITE CALIBRATION GUIDE
+        if len(ir.parameters) == 0:
+            return
+
+        ir.logger('>>> WRITING CALIBRATION PARAMETERS')
+
+        n_param = self.get_slide_n('Calibration')[0]
+        for n in range(len(ir.parameters) - 1):
+            self.ppt.Slides(n_param).Duplicate()
+
+        for n, param in enumerate(ir.parameters):
+            table = self._get_table(n_param + n, 1)
+            if len(param) > 3:
+                for _ in range(len(param) - 3):
+                    table.Rows.Add()
+            table.Columns(1).Width = 5.0 * 28.346
+            table.Columns(2).Width = 7.0 * 28.346
+            table.Columns(3).Width = 4.0 * 28.346
+            table.Columns(5).Width = 2.0 * 28.346
+            table.Columns(6).Width = 2.0 * 28.346
+            table.Columns(7).Width = 2.0 * 28.346
+            for r, index in enumerate(param.index, start=1):
+                row = param.loc[index]
+                for c, val in enumerate(row.values, start=1):
+                    cell = table.Cell(r + 1, c).Shape
+                    cell.TextFrame.TextRange.Text = str(val)
+                    cell.TextFrame.TextRange.Font.Name = "현대하모니 L"
+                    cell.TextFrame.TextRange.Font.Size = 10
+
+                    cell.TextFrame.TextRange.ParagraphFormat.Alignment = 1 if c == 2 else 2
+                    cell.TextFrame.VerticalAnchor = 3
+        return
 
     @classmethod
     def routine_capture(cls, ppt:str='', size:int=26, *hotkey):
@@ -55,7 +170,7 @@ class ChangeHistoryManager(PptRW):
 
         return
 
-    def resize_cover(self):
+    def _resize_cover(self):
         """
         | n ==  7 | n == 3 |
         | n ==  8 | n == 4 |
@@ -105,15 +220,6 @@ class ChangeHistoryManager(PptRW):
         self.set_table_font(n_slide=1, n_table=1, cell=(2, 1), size=10)
 
     @property
-    def function(self) -> str:
-        return self.__dict__.get('_function', '')
-
-    @function.setter
-    def function(self, functions:Iterable):
-        self.set_text_in_table(n_slide=1, n_table=2, cell=(3, 2), text=", ".join(functions), pos='new')
-        self.set_table_font(n_slide=1, n_table=2, cell=(3, 2), size=10)
-
-    @property
     def issue(self) -> str:
         return self.__dict__.get('_issue', '')
 
@@ -146,33 +252,8 @@ class ChangeHistoryManager(PptRW):
     def problem(self, problem:str):
         self.set_text_in_table(n_slide=1, n_table=2, cell=(5, 1), text=problem, pos='new')
 
-    @property
-    def prev_model_description(self) -> str:
-        return self.__dict__.get('_prev_model_description', '')
-
-    @prev_model_description.setter
-    def prev_model_description(self, models:DataFrame):
-        text = ''
-        for n in models.index:
-            text += f'%{models.loc[n, "FunctionName"]} <r.{models.loc[n, "SCMRev"]}>\x0b\x0b\n'
-        text = text[:-1]
-        self.set_text_in_table(n_slide=2, n_table=1, cell=(2, 1), text=text, pos='new')
-
-    @property
-    def post_model_description(self) -> str:
-        return self.__dict__.get('_post_model_description', '')
-
-    @post_model_description.setter
-    def post_model_description(self, models: DataFrame):
-        text = ''
-        for n in models.index:
-            text += f'%{models.loc[n, "FunctionName"]} <r.{models.loc[n, "SCMRev"]}>\x0b-\x0b\n'
-        text = text[:-1]
-        self.set_text_in_table(n_slide=2, n_table=1, cell=(2, 2), text=text, pos='new')
-
-    def set_model_slides(self, ir:DataFrame):
-        if self.log is not None:
-            self.log('>>> GENERATING MODEL SLIDES...')
+    def _set_model_slides(self):
+        ir = self.ir.table
         self.set_shape(n_slide=3, n_shape=1, width=26.1 * 28.346, left=0.8 * 28.346)
         self.set_text_font(n_slide=3, n_shape=1, name="현대하모니 M", size=20)
         self.set_table_height(n_slide=3, n_table=1, row=2, height=11 * 28.346)
@@ -201,110 +282,3 @@ class ChangeHistoryManager(PptRW):
             self.set_text_in_table(n_slide=n_formula, n_table=1, cell=(3, 2), text="Impl. 추가\x0b", pos="new")
         self.ppt.SectionProperties.AddBeforeSlide(self.get_slide_n('Calibration')[0], 'Calibration Guide')
         return
-
-    @property
-    def prev_model_details(self):
-        return self.__dict__.get('_prev_model_details', '')
-
-    @prev_model_details.setter
-    def prev_model_details(self, models:DataFrame):
-        if self.log is not None:
-            self.log('>>> WRITING PREVIOUS MODEL DETAILS...')
-        for n in models.index:
-            name, rev = models.loc[n, "FunctionName"], models.loc[n, "SCMRev"]
-            if self.log is not None:
-                self.log(f'>>> ... {name} @{rev}')
-            slides = self.get_slide_n(f'{name} ')
-            for slide in slides:
-                self.replace_text_in_table(
-                    n_slide=slide,
-                    n_table=1,
-                    cell=(1, 1),
-                    prev="Rev.",
-                    post=f"Rev.{rev}"
-                )
-
-    @property
-    def post_model_details(self):
-        return self.__dict__.get('_post_model_details', '')
-
-    @post_model_details.setter
-    def post_model_details(self, models:DataFrame):
-        if self.log is not None:
-            self.log('>>> WRITING POST MODEL DETAILS...')
-        for n in models.index:
-            name, rev = models.loc[n, "FunctionName"], models.loc[n, "SCMRev"]
-            if self.log is not None:
-                self.log(f'>>> ... {name} @{rev}')
-            slides = self.get_slide_n(f'{name} ')
-            for slide in slides:
-                self.replace_text_in_table(
-                    n_slide=slide,
-                    n_table=1,
-                    cell=(1, 2),
-                    prev="Rev.",
-                    post=f"Rev.{rev}"
-                )
-            slides = self.get_slide_n(f'{name} / Element')
-            for slide in slides:
-                self.set_text_in_table(
-                    n_slide=slide,
-                    n_table=1,
-                    cell=(3, 1),
-                    text='Element 삭제\x0b' + models.loc[n, "ElementDeleted"],
-                    pos="new"
-                )
-                self.set_text_in_table(
-                    n_slide=slide,
-                    n_table=1,
-                    cell=(3, 2),
-                    text='Element 추가\x0b' + models.loc[n, "ElementAdded"],
-                    pos="new"
-                )
-
-    @property
-    def parameters(self) -> List[DataFrame]:
-        return self.__dict__.get('_parameters', [])
-
-    @parameters.setter
-    def parameters(self, parameters: List[DataFrame]):
-        if len(parameters) == 0:
-            return
-        self.__dict__['_parameters'] = parameters
-        if self.log is not None:
-            self.log('>>> WRITING CALIBRATION PARAMETERS...')
-
-        n_param = self.get_slide_n('Calibration')[0]
-        for n in range(len(parameters) - 1):
-            self.ppt.Slides(n_param).Duplicate()
-
-        for n, param in enumerate(parameters):
-            table = self._get_table(n_param + n, 1)
-            if len(param) > 3:
-                for _ in range(len(param) - 3):
-                    table.Rows.Add()
-            table.Columns(1).Width = 5.0 * 28.346
-            table.Columns(2).Width = 7.0 * 28.346
-            table.Columns(3).Width = 4.0 * 28.346
-            table.Columns(5).Width = 2.0 * 28.346
-            table.Columns(6).Width = 2.0 * 28.346
-            table.Columns(7).Width = 2.0 * 28.346
-            for r, index in enumerate(param.index, start=1):
-                row = param.loc[index]
-                for c, val in enumerate(row.values, start=1):
-                    cell = table.Cell(r + 1, c).Shape
-                    cell.TextFrame.TextRange.Text = str(val)
-                    cell.TextFrame.TextRange.Font.Name = "현대하모니 L"
-                    cell.TextFrame.TextRange.Font.Size = 10
-
-                    cell.TextFrame.TextRange.ParagraphFormat.Alignment = 1 if c == 2 else 2
-                    cell.TextFrame.VerticalAnchor = 3
-        return
-
-
-if __name__ == "__main__":
-    # ChangeHistoryManager.routine_capture('0000_CNGPIO_통신_인터페이스_개발.pptx', 13)
-    chm = ChangeHistoryManager(
-        path = r"D:\Archive\00_프로젝트\2017 통신개발-\2026\DS0127 CR10787035 DTC별 IUMPR 표출 조건 변경 ICE\0000_CAN_ICE_IUMPR표출_DEM조건_추가.pptx"
-    )
-    chm.resize_cover()

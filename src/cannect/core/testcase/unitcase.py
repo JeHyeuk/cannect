@@ -35,7 +35,7 @@ LABEL = {
     "ER-Value": '',
     "Test Result": '',
     "Test Result Description": '',
-    "Test Conductor": f"{env.KOREANAME} @HYUNDAI-KEFICO",
+    "Test Conductor": f"{env.USER} @HYUNDAI-KEFICO",
     "Test SW": '',
     "Test HW": '',
     "Test Vehicle / Engine / HIL": '',

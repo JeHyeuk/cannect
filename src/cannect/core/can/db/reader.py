@@ -1,11 +1,13 @@
+from cannect.config import env
 from cannect.core.can.db.schema import SCHEMA
 from cannect.core.can.db.vcs import CANDBVcs
+from cannect.core.can.db._dbc import to_dbc
+from cannect.errors import CANDBDuplicationError
 from cannect.schema.candb import CanSignal, CanMessage
 from cannect.schema.datadictionary import DataDictionary
 
-
 from pandas import DataFrame
-from typing import Dict, Union
+from typing import Union
 import pandas as pd
 import os
 
@@ -17,14 +19,14 @@ class CANDBReader:
     """
     def __init__(self, src:Union[str, DataFrame]='', **kwargs):
         if isinstance(src, DataFrame):
-            source = kwargs["source"] if "source" in kwargs else 'direct'
-            traceability = kwargs["traceability"] if "traceability" in kwargs else 'Untraceable'
+            source = kwargs.get('source', 'direct')
+            traceability = kwargs.get("traceability",'untraceable')
             __db__ = src.copy()
         else:
             if not str(src):
                 src = CANDBVcs().json
             source = src
-            traceability = "_".join(os.path.basename(source).split("_")[:-1])
+            traceability = "_".join(os.path.basename(source).split(".")[:-1])
             __db__ = pd.read_json(source, orient='index')
 
         __db__ = __db__[~__db__["Message"].isna()]
@@ -70,12 +72,17 @@ class CANDBReader:
         except AttributeError:
             return self.db.__getattr__(item)
 
+    def _check_engine_spec(self, engine_spec:str):
+        if not engine_spec.lower() in ["ice", "hev"]:
+            raise KeyError(f'Unsupported engine_spec: {engine_spec.upper()}')
+        return engine_spec.upper()
+
     @property
     def messages(self) -> DataDictionary:
         return DataDictionary({msg:CanMessage(df) for msg, df in self.db.groupby(by="Message")})
 
     @property
-    def signals(self) -> Union[Dict[str, CanSignal], DataDictionary]:
+    def signals(self) -> DataDictionary:
         return DataDictionary({str(sig["Signal"]):CanSignal(sig) for _, sig in self.db.iterrows()})
 
     def mode(self, engine_spec:str):
@@ -83,6 +90,41 @@ class CANDBReader:
 
     def is_developer_mode(self):
         return "Channel" in self.db.columns
+
+    def to_dbc(self, engine_spec:str, channel:Union[int, str], **kwargs):
+        engine_spec = self._check_engine_spec(engine_spec)
+        if isinstance(channel, int):
+            if engine_spec == "HEV":
+                channel = {1:'P', 2:'H', 3:'L'}[channel]
+            else:
+                channel = {1:'P', 2:'L', 3:'L'}[channel]
+        if not channel.upper() in ['P', 'H', 'L']:
+            raise KeyError(f'Unsupported channel: {channel.upper()}')
+        channel = channel.upper()
+
+        base = self.mode(engine_spec).db
+        base = base[base[f'{engine_spec} Channel'] == channel]
+        if 'Codeword' in kwargs:
+            base = base[base['Codeword'].str.replace(" ", "") == kwargs['Codeword'].replace(" ", "")]
+        if 'SystemConstant' in kwargs:
+            base = base[base['SystemConstant'].str.replace(" ", "") == kwargs['SystemConstant'].replace(" ", "")]
+
+        for _id, df in base.groupby("ID"):
+            msg = df["Message"].unique()
+            if len(msg) > 1:
+                raise CANDBDuplicationError(f'IN CHANNEL: {channel}, ID: "{_id}" IS DUPLICATED BY "{msg.tolist()}", SPECIFY {{Codeword}} or {{SystemConstant}}')
+
+        if channel == 'L' and engine_spec == 'HEV':
+            n_channel = '3'
+        else:
+            n_channel = {'P': 1, 'H': 2, 'L': '2, 3'}[channel]
+        filename = f'{engine_spec}-CAN{n_channel}'
+        if kwargs:
+            filename += "-" + "-".join([f'{{{val}}}' for val in kwargs.values()])
+        filename += '.dbc'
+        to_dbc(env.DOWNLOADS / filename, base)
+        return
+
 
     def to_developer_mode(self, engine_spec:str):
         """
@@ -137,12 +179,16 @@ if __name__ == "__main__":
 
     db = CANDBReader()
     # print(db)
-    print(db.source)
-    print(db.traceability)
-    print(db.revision)
+    # print(db.source)
+    # print(db.traceability)
+    # print(db.revision)
     # print(db.to_developer_mode("ICE").revision)
     # print(db.messages['ABS_ESC_01_10ms'])
     # print(db.columns)
     # print(db.is_developer_mode())
     # db2 = db.to_developer_mode("HEV")
     # print(db2[db2["Message"].str.contains("MCU")])
+
+    db.to_dbc("ICE", 1, Codeword="Cfg_CanSTDDB_C==2")
+    db.to_dbc("ICE", 2)
+    db.to_dbc("ICE", 3)

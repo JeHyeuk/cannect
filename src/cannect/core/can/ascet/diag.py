@@ -5,6 +5,7 @@ from cannect.core.ascet.ws import WorkspaceIO
 from cannect.core.can.db.reader import CANDBReader
 from cannect.core.can.ascet._db2code import INFO
 from cannect.core.can.rule import naming
+from cannect.errors import CANDBMessageNotFound
 from cannect.utils import tools
 from cannect.utils.logger import Logger
 
@@ -17,26 +18,25 @@ from cannect.utils.tools import path_abbreviate
 
 class CANDiag(Amd):
 
-    def __init__(self, db: CANDBReader, src: str, *messages, **kwargs):
+    def __init__(self, db: CANDBReader, base_model: str='', *messages):
 
         for message in messages:
             if not message in db.messages:
-                raise KeyError(f'{message} NOT EXIST IN CAN DB.')
+                raise CANDBMessageNotFound(f'{message} NOT EXIST IN CAN DB.')
 
         template = env.SVN_CAN / "CAN_Model/_29_CommunicationVehicle/StandardDB/StandardTemplate/CANDiagTmplt/CANDiagTmplt.main.amd"
         super().__init__(str(template))
 
-        self.ws = WorkspaceIO()
+        self.ws = ws = WorkspaceIO()
+        if not os.path.isfile(str(base_model)):
+            base_model = ws[base_model]
+        base = Amd(base_model)
 
         # LOGGER 생성
-        base = Amd(src)
-
         self.logger = Logger()
         self.logger(f"%{{{base.name}}} MODEL GENERATION")
         self.logger(f">>> DB VERSION: {db.revision}")
-        self.logger(f">>> BASE MODEL: {tools.path_abbreviate(src)}")
-        if "revision" in kwargs:
-            self.logger(f">>> MODEL REVISION: {kwargs['revision']}")
+        self.logger(f">>> BASE MODEL: {tools.path_abbreviate(base_model)}")
 
         # @self.n        : 메시지 순번
         # @self.db       : CAN DB 객체
@@ -75,7 +75,7 @@ class CANDiag(Amd):
                     cal[elem.get('name')] = list(data.iter('Numeric'))[0].get('value')
         return tx, hw, cal
 
-    def copy_from_basemodel(self, base: Amd):
+    def _copy_from_basemodel(self, base: Amd):
         """
         BASE 모델의 기본 정보들을 CANDiag으로 복사
         """
@@ -200,7 +200,7 @@ class CANDiag(Amd):
             self.spec.find('Specification/BlockDiagramSpecification/DiagramElements').append(breaker)
         return log
 
-    def copy_common(self):
+    def _copy_common(self):
         pascal = self.tx.lower().capitalize()
         if self.tx.lower() == "nox":
             pascal = "NOx"
@@ -231,7 +231,7 @@ class CANDiag(Amd):
                                             .replace("__TX_UPPER__", self.tx.upper())
         return
 
-    def copy_by_message(self, n:int, message:str):
+    def _copy_by_message(self, n:int, message:str):
         log = ''
 
         db = self.db.messages[message]
@@ -423,7 +423,7 @@ CHANNEL     : {db[f'{self.hw} Channel']}-CAN
         self.spec.find('Specification/BlockDiagramSpecification/DiagramElements').append(diagram)
         return log
 
-    def clear(self):
+    def _clear(self):
         # CANDiag Hierarchy 제거
         removals = []
         for elem in self.spec.iter():
@@ -481,7 +481,7 @@ CHANNEL     : {db[f'{self.hw} Channel']}-CAN
                 data.remove(elem)
         return
 
-    def copy_dsm(self):
+    def _copy_dsm(self):
         fid_md = Amd(self.ws["Fid_Typ.zip"])
         fid = fid_md.impl.dataframe("ImplementationSet", depth="shallow").set_index("name")["OID"]
         deve_md = Amd(self.ws["DEve_Typ.zip"])
@@ -530,14 +530,14 @@ CHANNEL     : {db[f'{self.hw} Channel']}-CAN
             })
         return
 
-    def copy_data(self):
+    def _copy_data(self):
         for data in self.data.iter('DataEntry'):
             if data.attrib.get('elementName', '') in self.cal:
                 numeric = list(data.iter('Numeric'))[0]
                 numeric.attrib['value'] = self.cal[data.attrib.get('elementName', '')]
         return
 
-    def exception(self):
+    def _exception(self):
 
         def _change_attr(element_name: str, **change_attr):
             for elem in self.main.iter('Element'):
@@ -592,29 +592,29 @@ CHANNEL     : {db[f'{self.hw} Channel']}-CAN
 
         # BASE 모델의 기본 정보들을 CANDiag으로 복사
         self.logger('>>> COPY BASE MODEL TO TEMPLATE')
-        log = self.copy_from_basemodel(self.base)
+        log = self._copy_from_basemodel(self.base)
         if log: self.logger(f'>>> ... {log}')
 
         # 공용 변수 Naming Rule 적용
-        self.copy_common()
+        self._copy_common()
 
         # 메시지별 템플릿 적용
         self.logger(f'>>> GENERATE HIERARCHY BY MESSAGES N={len(self.messages)}')
         for n, message in enumerate(self.messages, start=1):
-            log = self.copy_by_message(n, message)
+            log = self._copy_by_message(n, message)
             self.logger(f'>>> ... [{n} / {len(self.messages)}] {message}: {log}')
 
         # 템플릿 삭제
-        self.clear()
+        self._clear()
 
         self.logger(f'>>> COPY DSM LIBRARY IMPLEMENTATION')
-        self.copy_dsm()
+        self._copy_dsm()
 
         self.logger(f'>>> COPY CALIBRATION DATA FROM BASE MODEL')
-        self.copy_data()
+        self._copy_data()
 
         self.logger(f'>>> RUN EXCEPTION HANDLING')
-        self.exception()
+        self._exception()
 
         # 수동 예외처리 로그
         for instruction in self.manual_instruction:
@@ -640,7 +640,6 @@ CHANNEL     : {db[f'{self.hw} Channel']}-CAN
 
 
 if __name__ == "__main__":
-    from cannect.core.ascet.ws import WorkspaceIO
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
 
@@ -682,10 +681,11 @@ if __name__ == "__main__":
         "CanNOXD": ["Main_Status_Rear", "O2_Rear"]
     }
 
-    proj = WorkspaceIO()
-    data = CANDBReader().to_developer_mode("HEV")
+    # proj = WorkspaceIO()
+    data = CANDBReader()
+    # data = data.to_developer_mode("HEV")
 
-    template = CANDiag(data, proj["CanFDMCUD_HEV"], "MCU_01_P_10ms", "MCU_01_H_10ms", "MCU_02_P_10ms", "MCU_02_H_10ms", "MCU_03_100ms")
+    template = CANDiag(data, "CanFDMCUD_HEV", "MCU_01_10ms", "MCU_02_10ms", "MCU_03_100ms")
     template.generate()
 
 

@@ -1,5 +1,6 @@
+from cannect.config import env
 from pathlib import Path
-from typing import AnyStr, Callable, Iterable, List, Union
+from typing import  Callable, Iterable, List, Union
 from xml.etree.ElementTree import Element, ElementTree
 from xml.dom import minidom
 import os, zipfile, shutil, io, re
@@ -85,6 +86,8 @@ def clear(path: str, leave_path: bool = True):
         print(f"Error occurs while clearing directory: {e}")
 
 def path_abbreviate(path: Union[str, Path]) -> str:
+    if str(path).startswith(str(env.DOWNLOADS)):
+        return path
     sep = os.path.sep
     split = str(path).split(sep)
     return f"{sep.join(split[:2])}{sep} ... {sep}{sep.join(split[-3:])}"
