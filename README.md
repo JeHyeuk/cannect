@@ -239,6 +239,10 @@ print(vc.name)          # DB 파일 이름 (확장자 제외)
 print(vc.filename)      # DB 파일 이름 (확장자 포함)
 print(vc.revision)      # DB 파일 최신 SVN Revision
 print(vc.filepath)      # DB 파일 경로 (전체 경로)
+
+# 현재 SVN 최신 CAN Excel SPEC에 대한 json 파일이 없는 경우 .json 호출 시 오류 발생
+# 오류 발생 시 .to_json() 메소드 실행 필요
+# vc.to_json()
 print(vc.json)          # .revision에 해당하는 json 파일(전체 경로)
 print(vc.history)       # DB 파일 SVN 이력
 ```
@@ -423,7 +427,7 @@ ir.deliverables = "사용자의 로컬 경로 지정"
 # - mode == "latest"  : 대상 모델 Commit 미완료 상태, 최신 revision을 "변경 전" 모델로 간주 (기본 값)
 # - mode == "previous": 대상 모델 Commit 완료 상태, 직전 revision을 "변경 전" 모델로 간주
 # - mode == "select"  : 대상 모델에 대한 revision을 사용자가 모두 선택(console)
-ir.select_previous_svn_version(mode="latest")
+ir.select_previous_svn_version(mode="previous")
 
 # SDD 자동 업데이트 (잠재적 오류 내포)
 # 사용자는 개발 내용(이력)만 입력, 그 외 버전 관리는 자동 수행
@@ -466,11 +470,11 @@ from cannect import ChangeHistoryManager
 
 # ir 인스턴스가 존재한다고 가정
 # ∵ ir = IntegrationRequest(*modeuls)
-ppt = ChanHistoryManager(ir)
+ppt = ChangeHistoryManager(ir)
 
 # 1페이지 작성
 ppt.title       = "[CAN/공통] CAN BUS-OFF Recover Post Run 할당"   # 제목
-ppt.developer   = ir.User                                         # 개발 담당
+ppt.developer   = "이*혁"                                         # 개발 담당
 ppt.issue       = "VCDM CR10786223"                               # Issue
 ppt.lcr         = "자체 개선"                                      # LCR
 ppt.problem     = "OTA 업데이트 평가 중, ... 발생"                   # 문제 현상

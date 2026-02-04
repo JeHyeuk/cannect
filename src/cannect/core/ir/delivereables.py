@@ -2,7 +2,7 @@ from cannect.config import env
 from cannect.utils import tools
 from pathlib import Path
 from datetime import datetime
-import os
+import os, stat
 
 
 class Deliverables:
@@ -31,6 +31,7 @@ class Deliverables:
         root = self.Root
 
         os.makedirs(root, exist_ok=True)
+        os.chmod(root, stat.S_IWRITE)
         for n, path in enumerate(self.__slots__, start=0):
             if path == "Root":
                 continue
@@ -43,16 +44,10 @@ class Deliverables:
                 os.makedirs(os.path.join(full_path, f'Post'), exist_ok=True)
 
         if not any(file.endswith('.xlsm') for file in os.listdir(root)):
-            try:
-                tools.copy_to(env.SVN_IR / '0000_HNB_SW_IR_.xlsm', root)
-            except PermissionError:
-                pass
+            tools.copy_to(env.SVN_IR / '0000_HNB_SW_IR_.xlsm', root)
 
         if not any(file.endswith('.pptx') for file in os.listdir(root)):
-            try:
-                tools.copy_to(env.SVN_HISTORY / '0000_변경내역서 양식.pptx', root)
-            except PermissionError:
-                pass
+            tools.copy_to(env.SVN_HISTORY / '0000_변경내역서 양식.pptx', root)
         return
 
     def __getitem__(self, item):

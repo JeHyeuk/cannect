@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import  Callable, Iterable, List, Union
 from xml.etree.ElementTree import Element, ElementTree
 from xml.dom import minidom
-import os, zipfile, shutil, io, re
+import os, zipfile, shutil, io, re, stat
 
 
 def unzip(src: Union[str, Path], to: Union[str, Path] = "") -> bool:
@@ -39,7 +39,12 @@ def zip(path:Union[str, Path]):
     return
 
 def copy_to(file:Union[str, Path], dst:Union[str, Path]) -> str:
-    shutil.copy(file, dst)
+    if os.path.isfile(str(file)):
+        os.chmod(dst, stat.S_IWRITE)
+        os.chmod(file, stat.S_IWRITE)
+        shutil.copy(file, dst)
+    else:
+        shutil.copytree(file, dst, dirs_exist_ok=True)
     # if '.' in os.path.basename(file):
     #     shutil.copy(file, dst)
     # else:

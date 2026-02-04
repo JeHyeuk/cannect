@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cannect"
-version = "1.0.3"
-description = "HYUNDAI-KEFICO EMS/ASW CONVENIENCE TOOL"
+version = "1.0.4"
+description = "HYUNDAI-KEFICO EMS/ASW CONVENIENCE TOOL\nAUTHOR: LEE JEHYEUK\nCONTACT: JeHyeuk.Lee@hyundai-kefico.com"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

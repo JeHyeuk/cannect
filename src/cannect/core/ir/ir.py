@@ -498,7 +498,7 @@ class IntegrationRequest:
                 self.logger.log(f' -> v{status}')
             else:
                 self.logger.log(f' -> v{sdd.version_doc}')
-            tools.copy_to(file, path)
+            tools.copy_to(file, path / row['SDDName'].replace('.zip', ''))
         tools.clear(temp, leave_path=True)
         return
 
@@ -561,23 +561,3 @@ if __name__ == "__main__":
     ir.resolve_sdd_version()
     ir.compare_model(prev='', post='', exclude_imported=False)
 
-    # 변경내역서 작성
-    # ppt = ChangeHistoryManager(
-    #     path=ir.deliverables["0000_CNGPIO_통신_인터페이스_개발_CANFD"],
-    #     logger=ir.logger
-    # )
-    # ppt.title                  = "[CAN] 송출 신호 음수 범위 미표출 오류 개선"
-    # ppt.developer              = "이제혁"
-    # ppt.function               = ir.table["FunctionName"]
-    # ppt.issue                  = "VCDM CR10787115"
-    # ppt.lcr                    = "자체 개선"
-    # ppt.problem                = "CF_Ems_DecelReq_Can 신호 음수 범위 표출 불가"
-    # ppt.prev_model_description = ir.p_table     # .select_previous_svn_version() 후행
-    # ppt.post_model_description = ir.table
-    # ppt.set_model_slides(ir.table)
-    # ppt.prev_model_details     = ir.p_table     # .select_previous_svn_version() 후행
-    # ppt.post_model_details     = ir.table
-    # ppt.parameters             = ir.parameters  # .compare_model()의 후행
-
-    print(ir)
-    # ir.to_clipboard()
