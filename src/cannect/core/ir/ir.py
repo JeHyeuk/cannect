@@ -44,6 +44,9 @@ class IntegrationRequest:
         Subversion.update(env.SVN_SDD)
         Subversion.update(env.SVN_CONF)
         Subversion.update(env.SVN_UNECE)
+
+        if not (env.TEMP / '~cannect').exists():
+            (env.TEMP / '~cannect').mkdir(exist_ok=True)
         return super().__new__(cls)
 
     def __init__(self, *models):
@@ -358,7 +361,7 @@ class IntegrationRequest:
         for n, row in enumerate(self):
             self.logger.hold(f">>> %{row['FunctionName']: <{self._space}} ")
             if col == '' or col == 'SCMName':
-                self.table.loc[n, 'SCMRev'] = _get_log(env.SVN_MODEL / f'ascet/trunk/{row["SCMName"]}.zip')
+                self.table.loc[n, 'SCMRev'] = _get_log(self.ws[row['FunctionName']])
             if col == '' or col == 'DSMName':
                 if pd.isna(row["DSMName"]) or (row["DSMName"] == ''):
                     self.logger.hold(f'|{" " * (self._space + 13 + 11)}')

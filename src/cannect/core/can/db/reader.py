@@ -12,6 +12,13 @@ import pandas as pd
 import os
 
 
+# class CANDBReader(DataFrame):
+#
+#     _metadata = ["source", "traceability", "revision"]
+#
+
+
+
 class CANDBReader:
     """
     CAN DB 데이터프레임
@@ -78,7 +85,7 @@ class CANDBReader:
         return engine_spec.upper()
 
     @property
-    def messages(self) -> DataDictionary:
+    def messages(self) -> DataDictionary[str, CanMessage]:
         return DataDictionary({msg:CanMessage(df) for msg, df in self.db.groupby(by="Message")})
 
     @property
@@ -104,11 +111,17 @@ class CANDBReader:
 
         base = self.mode(engine_spec).db
         base = base[base[f'{engine_spec} Channel'] == channel]
-        if 'Codeword' in kwargs:
-            base = base[base['Codeword'].str.replace(" ", "") == kwargs['Codeword'].replace(" ", "")]
-        if 'SystemConstant' in kwargs:
-            base = base[base['SystemConstant'].str.replace(" ", "") == kwargs['SystemConstant'].replace(" ", "")]
 
+        if 'Codeword' in kwargs:
+            cfg = ''.join([c for c in kwargs['Codeword'][:-2] if not c in ['=', '<', '>', ' ']])
+            mask1 = base['Codeword'].str.replace(" ", "") == kwargs['Codeword'].replace(" ", "")
+            mask2 = (base['Codeword'] == '') | (~base['Codeword'].str.contains(cfg))
+            base = base[mask1 | mask2]
+        if 'SystemConstant' in kwargs:
+            base = base[
+                (base['SystemConstant'].str.replace(" ", "") == kwargs['SystemConstant'].replace(" ", "")) |
+                (base['SystemConstant'] == '')
+            ]
         for _id, df in base.groupby("ID"):
             msg = df["Message"].unique()
             if len(msg) > 1:
@@ -176,6 +189,8 @@ class CANDBReader:
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
+    from cannect import mount
+    mount(r"E:\\SVN")
 
     db = CANDBReader()
     # print(db)
@@ -189,6 +204,6 @@ if __name__ == "__main__":
     # db2 = db.to_developer_mode("HEV")
     # print(db2[db2["Message"].str.contains("MCU")])
 
-    db.to_dbc("ICE", 1, Codeword="Cfg_CanSTDDB_C==2")
-    db.to_dbc("ICE", 2)
-    db.to_dbc("ICE", 3)
+    db.to_dbc("HEV", 1)
+    # db.to_dbc("ICE", 2)
+    # db.to_dbc("ICE", 3)

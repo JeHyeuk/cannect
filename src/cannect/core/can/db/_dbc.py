@@ -69,7 +69,7 @@ def to_dbc(file:str, df:DataFrame):
 
             Signal_Name = row.get("Signal", None)
             if Signal_Name:
-                StartBit = row.get("Startbit", 0)#컬럼명 대소문자 구분 필@@@@@@@@@@@@@@@@@@@@@@@@@@@
+                StartBit = row.get("StartBit", 0)#컬럼명 대소문자 구분 필@@@@@@@@@@@@@@@@@@@@@@@@@@@
                 Length = row.get("Length", 0)
                 ByteOrder = row.get("ByteOrder", "Intel")
 

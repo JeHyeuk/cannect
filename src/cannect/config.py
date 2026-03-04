@@ -32,6 +32,7 @@ E.COMPANY   = "HYUNDAI KEFICO Co.,Ltd."
 E.COPYRIGHT = f'Copyright {E.COMPANY} 2020-{datetime.now().year}. All rights reserved.'
 E.DIVISION  = "ELECTRIFICATION PT CONTROL TEAM 1"
 E.USER = __namespace__.get(E.USERNAME, '알 수 없음')
+E.who_is = lambda x: __namespace__.get(str(x), "알 수 없음")
 
 
 def mount(svn_path=None):

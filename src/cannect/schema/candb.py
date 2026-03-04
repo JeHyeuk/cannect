@@ -190,6 +190,20 @@ class CanMessage(object):
                 return sig
         return Series()
 
+    @property
+    def syscon(self) -> str:
+        for syscon in self.signals['SystemConstant'].unique():
+            if self.signals['SystemConstant'].value_counts()[syscon] == len(self.signals):
+                return syscon
+        return ""
+
+    @property
+    def codeword(self) -> str:
+        for cd in self.signals['Codeword'].unique():
+            if self.signals['Codeword'].value_counts()[cd] == len(self.signals):
+                return cd
+        return ""
+
     def hasCrc(self) -> bool:
         if not hasattr(self, '__hascrc__'):
             self.__setattr__('__hascrc__', not self.crc.empty)
@@ -205,7 +219,6 @@ class CanMessage(object):
         return len(status) == 1 and status[0].lower() == "tsw"
 
 
-
 if __name__ == "__main__":
 
     from pandas import read_json
@@ -213,14 +226,16 @@ if __name__ == "__main__":
     set_option('display.expand_frame_repr', False)
 
 
-    src = r'E:\SVN\dev.bsw\hkmc.ems.bsw.docs\branches\HEPG_Ver1p1\11_ProjectManagement\CAN_Database\dev\KEFICO-EMS_CANFD_V25.08.01.json'
+    src = r'E:\SVN\dev.bsw\hkmc.ems.bsw.docs\branches\HEPG_Ver1p1\11_ProjectManagement\CAN_Database\dev\자체제어기_KEFICO-EMS_CANFD_r21742@01.json'
     rdb = read_json(src, orient='index')
     # print(rdb)
 
     # sig = CanSignal(rdb.iloc[100])
     # print(sig)
 
-    msg = CanMessage(rdb[rdb["Message"] == 'HU_GW_PE_01'])
+    msg = CanMessage(rdb[rdb["Message"] == 'PT_OBM_01_1000ms'])
     print(msg)
     print(msg.hasAliveCounter())
+    print(msg.syscon)
+    print(msg.codeword)
 

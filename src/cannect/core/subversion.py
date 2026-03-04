@@ -72,7 +72,7 @@ class Subversion:
         data = []
         line = ''
         for n, part in enumerate(text):
-            if n % 2:
+            if n % 2: # 홀수 인덱스
                 line = f'{line} | {part}'.split(' | ')
                 data.append(line)
                 line = ''
@@ -81,7 +81,6 @@ class Subversion:
         data = DataFrame(data=data)
         data = data.drop(columns=[3]).rename(columns={0: 'revision', 1:'author', 2: 'datetime', 4: 'log'})
         data = data[data['revision'].str.startswith('r')]
-        data = data[data["log"].str.startswith('[')]
         data["datetime"] = data["datetime"].apply(lambda x: x[:x.find('+0900') - 1])
         data["log"] = data["log"].apply(lambda x: x.split('] ')[-1])
         return data
@@ -148,6 +147,15 @@ class Subversion:
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
+    from cannect.core.ascet.ws import WorkspaceIO
+    from cannect import mount
+
+    mount(r"E:\\SVN")
+
+    ws = WorkspaceIO()
+    file = ws['CanFDEMSOM']
+    # print(file)
+    print(Subversion.log(file))
 
     # Subversion.commit(
     #     path=r"E:\SVN\dev.bsw\hkmc.ems.bsw.docs\branches\HEPG_Ver1p1\11_ProjectManagement\CAN_Database\dev\G-PROJECT_KEFICO-EMS_CANFD_r21676@01.json",

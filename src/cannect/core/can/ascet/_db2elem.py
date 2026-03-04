@@ -81,15 +81,12 @@ def SignalElement(signal:CanSignal, oid_tag:Optional[Dict[str, str]]=None) -> Da
     kwargs.name = name = f'{element_name}_{"Ems" if signal.ECU == "EMS" else "Can"}'
     kwargs.OID = oid_tag[name] if name in oid_tag else generateOID()
     kwargs.comment = signal.Definition
-    if signal.ECU == "EMS":
-        kwargs.comment = ""
     kwargs.modelType = 'scalar'
+    kwargs.basicModelType = 'cont'
     if signal.Length == 1:
         kwargs.basicModelType = "log"
-    elif signal.Formula == "OneToOne":
+    if signal.Formula == "OneToOne":
         kwargs.basicModelType = "udisc"
-    else:
-        kwargs.basicModelType = 'cont'
     kwargs.unit = signal.Unit
 
     kwargs.kind = "message"
@@ -97,7 +94,16 @@ def SignalElement(signal:CanSignal, oid_tag:Optional[Dict[str, str]]=None) -> Da
     if signal.ECU == "EMS":
         kwargs.scope = "imported"
         if signal.isCrc() or signal.isAliveCounter():
+            signal.Formula = "OneToOne"
             kwargs.scope = "local"
+            kwargs.basicModelType = 'udisc'
+            kwargs.kind = 'variable'
+            if signal.SystemConstant:
+                kwargs.comment = f'[{signal.SystemConstant}] {kwargs.comment}'
+
+    if kwargs.scope == 'imported':
+        kwargs.unit = ""
+        kwargs.comment = ""
 
     kwargs.quantization = "0" if kwargs.basicModelType == "cont" else "1"
     kwargs.formula = signal.Formula
@@ -122,7 +128,6 @@ def SignalElement(signal:CanSignal, oid_tag:Optional[Dict[str, str]]=None) -> Da
         kwargs.physMax = "800.0"
     if str(signal.name).startswith("TCU_GrRatioChngProg"):
         kwargs.physMax = "1.0"
-
 
     kwargs.value = "false" if kwargs.basicModelType == "log" else "0.0" if kwargs.basicModelType == "cont" else "0"
     return elementWrapper(**kwargs)
@@ -153,7 +158,10 @@ class MessageElement:
     def __init__(self, message:CanMessage, oid_tag:Optional[Dict[str, str]]=None):
         if not oid_tag:
             oid_tag = {}
+
         comment_id = f'{message.name}({message["ID"]})'
+        if message.syscon:
+            comment_id = f'[{message.syscon}] {comment_id}'
         timer_formula = f"Ti_q{str(message['taskTime']).replace('.', 'p')}_s".replace('p0_s', '_s')
         timer_round = 3 if message["taskTime"] == 0.001 else 2
         """
@@ -193,7 +201,7 @@ class MessageElement:
         """
         MethodBody = Element('MethodBody', methodName=rule.method, methodOID=oid_tag[rule.method])
         CodeBlock = Element('CodeBlock')
-        CodeBlock.text = _db2code.MessageCode(message).method
+        CodeBlock.text = _db2code.MessageCode(message).recv
         MethodBody.append(CodeBlock)
         self.MethodBody = MethodBody
 

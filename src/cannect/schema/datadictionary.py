@@ -1,9 +1,11 @@
 from pathlib import Path
+from typing import Dict, TypeVar
 import pprint, os
 
+KT = TypeVar("KT")
+VT = TypeVar("VT")
 
-
-class DataDictionary(dict):
+class DataDictionary(Dict[KT, VT]):
     """
     데이터 저장 Dictionary
     built-in: dict의 확장으로 저장 요소에 대해 attribute 접근 방식을 허용

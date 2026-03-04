@@ -215,9 +215,12 @@ class ComDef:
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
+    from cannect.config import mount
+    mount(r"E:\\SVN")
 
-    db = CANDBReader()
-    # db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21676@01.json')
+
+    # db = CANDBReader()
+    db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21784@02.json')
 
     engine_spec = "HEV"
 
@@ -230,11 +233,11 @@ if __name__ == "__main__":
     # db = db[db["Status"] != "TSW"] # TSW 제외
     # db = db[~db["Requirement ID"].isin(["VCDM CR10777888"])] # 특정 CR 제외
     # db = db[~db["Required Date"].isin(["2024-08-27"])] # 특정 일자 제외
-    # db = db[~db["Message"].isin([ # 특정 메시지 제외
-    #     "L_H8L_01_10ms",
-    #     "H8L_01_10ms",
-    #     "H8L_02_10ms",
-    # ])]
+    db = db[~db["Message"].isin([ # 특정 메시지 제외
+        "L_H8L_01_10ms",
+        "H8L_01_10ms",
+        "H8L_02_10ms",
+    ])]
     # db.revision = "TEST SW" # 공식SW는 주석 처리
     # DB CUSTOMIZE END --------------------------------------------------
 
@@ -252,6 +255,6 @@ if __name__ == "__main__":
         db=db,
         engine_spec=engine_spec,
         exclude_tsw=True,
-        # base_model=env.ASCET / f"Export/ComDef_G/ComDef_G.main.amd"
+        base_model=env.ASCET / f"Export/ComDef_G/ComDef_G.main.amd"
     )
     model.generate()

@@ -10,7 +10,7 @@ from pandas import DataFrame
 from pathlib import Path
 from pyperclip import paste
 from typing import Callable
-import os
+import os, time
 
 
 class CANDBVcs:
@@ -23,6 +23,22 @@ class CANDBVcs:
     """
     silence :bool     = False
     logger  :Callable = print
+
+    @classmethod
+    def clipbd2db(cls) -> DataFrame:
+        """
+        사용자가 Excel DB를 클립보드로 복사한 경우, 클립보드 내용을 DataFrame으로 변환
+        :return:
+        """
+        clipboard = [row.split("\t") for row in paste().split("\r\n")]
+        source = DataFrame(data=clipboard[1:], columns=standardize(clipboard[0]))
+        source = source[~source["ECU"].isna() & (source["ECU"] != "")]
+        file = env.DOWNLOADS / "manual_candb.json"
+        source.to_json(file, orient='index')
+        cls.logger("Manually Updated CAN DB from clipboard.")
+        cls.logger(f"- Saved as : {file}")
+        return source
+
 
     def __init__(self, filename:str=''):
         if not filename:
@@ -88,6 +104,11 @@ class CANDBVcs:
         source = DataFrame(data=clipboard[1:], columns=standardize(clipboard[0]))
         source = source[~source["ECU"].isna() & (source["ECU"] != "")]
         source.to_json(jsonpath, orient='index')
+        if "xl" in locals():
+            xl.wb.Close(SaveChanges=False)
+            time.sleep(1)
+            if xl.close_end:
+                xl.app.Quit()
         if not self.silence:
             self.logger("Manually Updated CAN DB from clipboard.")
             self.logger(f"- Saved as : {path_abbreviate(jsonpath)}")
@@ -102,8 +123,11 @@ class CANDBVcs:
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
+    from cannect import mount
 
-    cdb = CANDBVcs()
+    mount(r"E:\\SVN")
+
+    cdb = CANDBVcs(r"자체제어기_KEFICO-EMS_CANFD.xlsx")
     # cdb = CANDBVcs(r"G-PROJECT_KEFICO-EMS_CANFD.xlsx")
     # print(cdb.revision)
     cdb.to_json()

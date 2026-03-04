@@ -29,3 +29,8 @@ from cannect.utils import ComExcel, Logger
 from cannect.utils import tools as Tools
 
 mount()
+
+
+# import cannect as cn
+
+

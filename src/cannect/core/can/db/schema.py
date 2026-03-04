@@ -1,5 +1,6 @@
 from cannect.schema.datadictionary import DataDictionary
 from pandas import Index
+from typing import Union, List
 
 
 SCHEMA =__meta__ = DataDictionary({
@@ -240,7 +241,7 @@ SCHEMA =__meta__ = DataDictionary({
 })
 
 
-def standardize(columns: Index) -> list:
+def standardize(columns: Union[Index, List]) -> list:
     standard_columns = []
     for col in __meta__:
         if col in columns:

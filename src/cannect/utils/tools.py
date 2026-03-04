@@ -126,7 +126,8 @@ class xml:
             .replace("<Comment/>", "<Comment></Comment>") \
             .replace("ns0:", "") \
             .replace('xmlns:ns0="http://www.w3.org/2000/09/xmldsig#" ', '') \
-            .replace('<Signature>', '<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">')
+            .replace('<Signature>', '<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">') \
+            .replace("&amp;#13;", "&#13;")
         # if not xml.getroot().tag == 'Specifications':
         dom = "\n".join([l for l in dom.split("\n") if "<" in l or ';' in l or '=' in l or not l.startswith("\t")])        # dom = '\n'.join([line for line in dom.split('\n') if line.strip()])
         if not xml_declaration:
