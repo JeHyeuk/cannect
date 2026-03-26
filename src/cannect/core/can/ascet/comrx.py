@@ -111,10 +111,13 @@ class ComRx:
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
+    from cannect.config import mount
+
+    mount(r"E:\\SVN")
 
 
-    db = CANDBReader()
-    # db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21676@01.json')
+    # db = CANDBReader()
+    db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21812@02.json')
 
 
     engine_spec = "HEV"
@@ -135,6 +138,6 @@ if __name__ == "__main__":
         db=db,
         engine_spec=engine_spec,
         # base_model="",
-        # base_model=env.ASCET / f"Export/ComRx_G/ComRx_G.main.amd"
+        base_model=env.ASCET / f"Export/ComRx_G/ComRx_G.main.amd"
     )
     model.generate()

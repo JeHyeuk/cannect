@@ -105,9 +105,9 @@ class CANDBVcs:
         source = source[~source["ECU"].isna() & (source["ECU"] != "")]
         source.to_json(jsonpath, orient='index')
         if "xl" in locals():
-            xl.wb.Close(SaveChanges=False)
-            time.sleep(1)
             if xl.close_end:
+                xl.wb.Close(SaveChanges=False)
+                time.sleep(1)
                 xl.app.Quit()
         if not self.silence:
             self.logger("Manually Updated CAN DB from clipboard.")
@@ -127,8 +127,8 @@ if __name__ == "__main__":
 
     mount(r"E:\\SVN")
 
-    cdb = CANDBVcs(r"자체제어기_KEFICO-EMS_CANFD.xlsx")
-    # cdb = CANDBVcs(r"G-PROJECT_KEFICO-EMS_CANFD.xlsx")
+    # cdb = CANDBVcs(r"자체제어기_KEFICO-EMS_CANFD.xlsx")
+    cdb = CANDBVcs(r"G-PROJECT_KEFICO-EMS_CANFD.xlsx")
     # print(cdb.revision)
     cdb.to_json()
     print(cdb.json)

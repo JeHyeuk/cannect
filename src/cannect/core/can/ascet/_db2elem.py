@@ -122,8 +122,23 @@ def SignalElement(signal:CanSignal, oid_tag:Optional[Dict[str, str]]=None) -> Da
         min_val = int(kwargs.implMin) * f.quantization + f.offset
         max_val = int(kwargs.implMax) * f.quantization + f.offset
 
-    kwargs.physMin = f"{min_val}" if kwargs.basicModelType == "cont" else f"{int(min_val)}"
-    kwargs.physMax = f"{max_val}" if kwargs.basicModelType == "cont" else f"{int(max_val)}"
+    if str(max_val)[-2] == '0':
+        try:
+            if str(max_val)[-4:-1] == '000':
+                flag, temp = False, []
+                for c in str(max_val)[::-1][1:]:
+                    if c != '0':
+                        flag = True
+                    if flag:
+                        temp.append(c)
+                max_val = ''.join(temp)[::-1]
+        except (IndexError, Exception):
+            pass
+    try:
+        kwargs.physMin = f"{min_val}" if kwargs.basicModelType == "cont" else f"{int(min_val)}"
+        kwargs.physMax = f"{max_val}" if kwargs.basicModelType == "cont" else f"{int(max_val)}"
+    except ValueError:
+        print(kwargs)
     if str(signal.name).startswith("FPCM_ActlPrsrVal"):
         kwargs.physMax = "800.0"
     if str(signal.name).startswith("TCU_GrRatioChngProg"):

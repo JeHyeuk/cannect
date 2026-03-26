@@ -27,6 +27,8 @@ class ComDef:
         db = db[~db["ECU"].isin(exclude_ecus)]
         if not db.is_developer_mode():
             db = db.to_developer_mode(engine_spec)
+        if exclude_tsw:
+            db = db[db["Status"] != "TSW"]
 
         if base_model:
             name = os.path.basename(base_model).split(".")[0]
@@ -220,7 +222,7 @@ if __name__ == "__main__":
 
 
     # db = CANDBReader()
-    db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21784@02.json')
+    db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21815@01.json')
 
     engine_spec = "HEV"
 
@@ -233,28 +235,21 @@ if __name__ == "__main__":
     # db = db[db["Status"] != "TSW"] # TSW 제외
     # db = db[~db["Requirement ID"].isin(["VCDM CR10777888"])] # 특정 CR 제외
     # db = db[~db["Required Date"].isin(["2024-08-27"])] # 특정 일자 제외
-    db = db[~db["Message"].isin([ # 특정 메시지 제외
-        "L_H8L_01_10ms",
-        "H8L_01_10ms",
-        "H8L_02_10ms",
-    ])]
+    # db = db[~db["Message"].isin([ # 특정 메시지 제외
+    #     "L_H8L_01_10ms",
+    #     "H8L_01_10ms",
+    #     "H8L_02_10ms",
+    # ])]
     # db.revision = "TEST SW" # 공식SW는 주석 처리
     # DB CUSTOMIZE END --------------------------------------------------
-
-    # model = ComDef(
-    #     db=db,
-    #     engine_spec=engine_spec,
-    #     exclude_tsw=True,
-    #     # base_model="",
-    #     # base_model=r'D:\SVN\model\ascet\trunk\HNB_GASOLINE\_29_CommunicationVehicle\StandardDB\NetworkDefinition\ComDef\ComDef-22368\ComDef.main.amd'
-    #     # base_model=ENV['ASCET_EXPORT_PATH']
-    # )
-    # model.generate()
 
     model = ComDef(
         db=db,
         engine_spec=engine_spec,
         exclude_tsw=True,
+        # base_model="",
+        # base_model=r'D:\SVN\model\ascet\trunk\HNB_GASOLINE\_29_CommunicationVehicle\StandardDB\NetworkDefinition\ComDef\ComDef-22368\ComDef.main.amd'
+        # base_model=ENV['ASCET_EXPORT_PATH']
         base_model=env.ASCET / f"Export/ComDef_G/ComDef_G.main.amd"
     )
     model.generate()
