@@ -276,6 +276,8 @@ class CANDiag(Amd):
         pascal = self.tx.lower().capitalize()
         if self.tx.lower() == "nox":
             pascal = "NOx"
+        if self.tx.lower() == "frcmr":
+            pascal = "FrCmr"
         replace_name = {
             f'CanD_cEnaDiagBus__M1_Chn__': f'CanD_cEnaDiagBus{chn}',
             f'CanD_cEnaDetBus__M1_Chn____TX_Pascal__': f'CanD_cEnaDetBus{chn}{pascal}',
