@@ -4,7 +4,7 @@ __all__ = [
 
     # .core
     "Ascet",
-    "AscetCAN", "DataBaseCAN",
+    "AscetCAN", "DataBaseCAN", "NamingRule", "TestCaseCAN",
     "IntegrationRequest", "ChangeHistoryManager",
     "Subversion",
     "TestCase", "TestCasePlot", "TestCaseUnit",
@@ -20,7 +20,7 @@ __all__ = [
 
 from cannect.config import env, mount
 from cannect.core import ascet as Ascet
-from cannect.core.can import AscetCAN, DataBaseCAN
+from cannect.core.can import AscetCAN, DataBaseCAN, TestCaseCAN, NamingRule
 from cannect.core.ir import IntegrationRequest, ChangeHistoryManager
 from cannect.core.subversion import Subversion
 from cannect.core.testcase import TestCase, TestCasePlot, TestCaseUnit

@@ -469,11 +469,12 @@ if __name__ == "__main__":
     # det = detection("ABS_ESC_01_10ms", vr)
 
     det = detection("ABS_ESC_01_10ms")
-    alive = diagnosis_alive("ABS_ESC_01_10ms")
-    crc = diagnosis_crc("ABS_ESC_01_10ms"),
-    fid = fid_inhibit("ABS_ESC_01_10ms")
-    clear = error_clear("ABS_ESC_01_10ms")
-    print(det)
-    print(alive)
-    print(clear)
+    # alive = diagnosis_alive("ABS_ESC_01_10ms")
+    # crc = diagnosis_crc("ABS_ESC_01_10ms"),
+    # fid = fid_inhibit("ABS_ESC_01_10ms")
+    # clear = error_clear("ABS_ESC_01_10ms")
+    # print(det)
+    # print(alive)
+    # print(clear)
 
+    det.to_report()

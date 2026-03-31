@@ -204,6 +204,6 @@ if __name__ == "__main__":
     # db2 = db.to_developer_mode("HEV")
     # print(db2[db2["Message"].str.contains("MCU")])
 
-    db.to_dbc("HEV", 1)
+    db.to_dbc("ICE", 1, Codeword="Cfg_CanSTDDB_C == 0")
     # db.to_dbc("ICE", 2)
     # db.to_dbc("ICE", 3)

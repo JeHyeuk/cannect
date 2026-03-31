@@ -243,6 +243,8 @@ class CANDiag(Amd):
             chn = '2'
         if (str(nm) == "FPCM_01_100ms") or str(nm).startswith("CVVD"):
             chn = '3'
+        if str(nm) in ["Main_Status_Rear", "O2_Rear"]:
+            chn = '3'
 
         # 메시지 진단 타입 별 Hierarchy 복사 및 치환
         cp = "YY"
@@ -687,7 +689,7 @@ if __name__ == "__main__":
     data = CANDBReader()
     # data = data.to_developer_mode("HEV")
 
-    template = CANDiag(data, "CanFDMCUD_HEV", "MCU_01_10ms", "MCU_02_10ms", "MCU_03_100ms")
+    template = CANDiag(data, "CanNOXD", "Main_Status_Rear", "O2_Rear")
     template.generate()
 
 
