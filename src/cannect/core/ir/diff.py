@@ -56,34 +56,28 @@ class AmdDiff:
 
     @property
     def deleted(self) -> List[str]:
-        return list(set(self.prev_elem['name']) - set(self.post_elem['name']))
+        try:
+            return list(set(self.prev_elem['name']) - set(self.post_elem['name']))
+        except KeyError:
+            return []
 
     @property
     def added(self) -> List[str]:
         if self.is_equal:
             return []
-        return list(set(self.post_elem['name']) - set(self.prev_elem['name']))
+        try:
+            return list(set(self.post_elem['name']) - set(self.prev_elem['name']))
+        except KeyError:
+            return []
 
     @property
     def added_parameters(self) -> DataFrame:
-        elem = self.post_elem[self.post_elem['name'].isin(self.added)]
-        data = self.post_data[self.post_data['elementName'].isin(elem['name'])]
-        return self.parameters2table(elem, data)
-        # elem = self.post_elem[
-        #     self.post_elem['name'].isin(self.added) &
-        #     (self.post_elem['kind'] == 'parameter') &
-        #     (self.post_elem['scope'] != 'imported')
-        # ]
-        # elem.set_index(keys='OID', inplace=True)
-        # data = self.post_data[self.post_data['elementName'].isin(elem['name'])]
-        # data.set_index(keys='elementOID', inplace=True)
-        # elem = elem.join(data[['value']], how='left')
-        # elem = elem[["name", "comment", "model", "value"]]
-        # elem.columns = ['Name', 'Description', 'Module', 'Recommendation Cal']
-        # elem['Default Cal'] = elem['Recommendation Cal']
-        # elem['Disable Cal'] = '-'
-        # elem['Remark'] = '-'
-        # return elem
+        try:
+            elem = self.post_elem[self.post_elem['name'].isin(self.added)]
+            data = self.post_data[self.post_data['elementName'].isin(elem['name'])]
+            return self.parameters2table(elem, data)
+        except KeyError:
+            return DataFrame()
 
 
 if __name__ == "__main__":

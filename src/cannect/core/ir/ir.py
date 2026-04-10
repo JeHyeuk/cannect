@@ -318,9 +318,10 @@ class IntegrationRequest:
         data["SCMName"] = "\\".join(amd.main["nameSpace"][1:].split("/") + [name])
 
         elements = amd.main.dataframe('Element')
-        if not elements[
+        if not elements.empty and not elements[
             elements['name'].str.contains('DEve') |
-            elements['name'].str.contains('Fid')
+            elements['name'].str.contains('Fid') |
+            elements['name'].str.contains('DSig')
         ].empty:
             data["DSMName"] = conf = f'{name.lower()}_confdata.xml'
             # self.logger.hold(f'| {conf: <{self._space + 13}} ')
