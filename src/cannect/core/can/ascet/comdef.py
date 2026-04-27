@@ -221,10 +221,10 @@ if __name__ == "__main__":
     mount(r"E:\\SVN")
 
 
-    # db = CANDBReader()
-    db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21815@01.json')
+    db = CANDBReader()
+    # db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21815@01.json')
 
-    engine_spec = "HEV"
+    engine_spec = "ICE"
 
     # DB CUSTOMIZE ------------------------------------------------------
     # exclude_ecus = ["EMS", "CVVD", "MHSG", "NOx"]
@@ -250,6 +250,6 @@ if __name__ == "__main__":
         # base_model="",
         # base_model=r'D:\SVN\model\ascet\trunk\HNB_GASOLINE\_29_CommunicationVehicle\StandardDB\NetworkDefinition\ComDef\ComDef-22368\ComDef.main.amd'
         # base_model=ENV['ASCET_EXPORT_PATH']
-        base_model=env.ASCET / f"Export/ComDef_G/ComDef_G.main.amd"
+        # base_model=env.ASCET / f"Export/ComDef_G/ComDef_G.main.amd"
     )
     model.generate()

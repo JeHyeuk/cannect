@@ -127,8 +127,8 @@ if __name__ == "__main__":
 
     mount(r"E:\\SVN")
 
-    # cdb = CANDBVcs(r"자체제어기_KEFICO-EMS_CANFD.xlsx")
-    cdb = CANDBVcs(r"G-PROJECT_KEFICO-EMS_CANFD.xlsx")
+    cdb = CANDBVcs(r"자체제어기_KEFICO-EMS_CANFD.xlsx")
+    # cdb = CANDBVcs(r"G-PROJECT_KEFICO-EMS_CANFD.xlsx")
     # print(cdb.revision)
     cdb.to_json()
     print(cdb.json)

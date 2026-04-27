@@ -314,33 +314,29 @@ class IntegrationRequest:
         # self.logger.hold(f'>>> %{amd.name: <{self._space}} ')
 
         data = dict(zip(SCHEMA, [''] * len(SCHEMA)))
-        data["FunctionName"] = name = amd.name
-        data["SCMName"] = "\\".join(amd.main["nameSpace"][1:].split("/") + [name])
-
-        elements = amd.main.dataframe('Element')
-        if not elements.empty and not elements[
-            elements['name'].str.contains('DEve') |
-            elements['name'].str.contains('Fid') |
-            elements['name'].str.contains('DSig')
-        ].empty:
-            data["DSMName"] = conf = f'{name.lower()}_confdata.xml'
-            # self.logger.hold(f'| {conf: <{self._space + 13}} ')
-        else:
-            # self.logger.hold(f'| {"DSM NO USE": <{self._space + 13}} ')
-            pass
-
-        data["SDDName"] = sdd = f'{amd.main["OID"][1:]}.zip'
-        # self.logger.hold(f'| {sdd} ')
-
-        data["PolyspaceName"] = poly = f"BF_Result_{name}.7z"
-        # self.logger.hold(f'| {poly}')
-
         if self._user:
             data["User"] = self._user
         if self._date:
             data["Date"] = self._date
         if self._comment:
             data["Comment"] = self._comment
+
+        data["FunctionName"] = name = amd.name
+        data["SCMName"] = "\\".join(amd.main["nameSpace"][1:].split("/") + [name])
+
+        if not name in ["DEve_Typ", "Fid_Typ", "DSig_Typ"]:
+            elements = amd.main.dataframe('Element')
+            if not elements.empty and not elements[
+                elements['name'].str.contains('DEve') |
+                elements['name'].str.contains('Fid') |
+                elements['name'].str.contains('DSig')
+            ].empty:
+                data["DSMName"] = conf = f'{name.lower()}_confdata.xml'
+            else:
+                pass
+
+            data["SDDName"] = sdd = f'{amd.main["OID"][1:]}.zip'
+            data["PolyspaceName"] = poly = f"BF_Result_{name}.7z"
 
         self.table = pd.concat([self.table, DataFrame(data=data, index=[0])], ignore_index=True)
         self.p_table = self.table.copy()
@@ -362,7 +358,7 @@ class IntegrationRequest:
         for n, row in enumerate(self):
             self.logger.hold(f">>> %{row['FunctionName']: <{self._space}} ")
             if col == '' or col == 'SCMName':
-                self.table.loc[n, 'SCMRev'] = _get_log(self.ws[row['FunctionName']])
+                self.table.loc[n, 'SCMRev'] = _get_log(self.ws[row['SCMName'].replace("\\", "/")])
             if col == '' or col == 'DSMName':
                 if pd.isna(row["DSMName"]) or (row["DSMName"] == ''):
                     self.logger.hold(f'|{" " * (self._space + 13 + 11)}')
@@ -426,7 +422,7 @@ class IntegrationRequest:
         if not mode.lower() in ['previous', 'latest']:
             self.logger(f'[SELECT PREVIOUS MODEL VERSION]')
         for n, row in enumerate(self):
-            file = self.ws[row["FunctionName"]]
+            file = self.ws[row["SCMName"].replace('\\', '/')]
             history = Subversion.log(file)
             if mode.lower() in ['previous', 'latest']:
                 try:

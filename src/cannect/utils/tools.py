@@ -214,3 +214,7 @@ class KeywordSearch:
             return matches[0]
         else:
             return matches
+
+
+def compare_dataframe(x:DataFrame, y:DataFrame) -> DataFrame:
+    return
