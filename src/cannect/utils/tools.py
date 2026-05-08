@@ -1,4 +1,5 @@
 from cannect.config import env
+from pandas import DataFrame
 from pathlib import Path
 from typing import  Callable, Iterable, List, Union
 from xml.etree.ElementTree import Element, ElementTree
