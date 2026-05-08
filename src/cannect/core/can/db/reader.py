@@ -203,7 +203,11 @@ if __name__ == "__main__":
     # print(db.is_developer_mode())
     # db2 = db.to_developer_mode("HEV")
     # print(db2[db2["Message"].str.contains("MCU")])
+    for name, msg in db.messages.items():
+        if "OBM" in msg["SystemConstant"]:
+            print(name)
 
-    db.to_dbc("ICE", 1, Codeword="Cfg_CanSTDDB_C == 0")
+
+    # db.to_dbc("ICE", 1, Codeword="Cfg_CanSTDDB_C == 0")
     # db.to_dbc("ICE", 2)
     # db.to_dbc("ICE", 3)

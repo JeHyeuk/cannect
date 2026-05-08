@@ -143,7 +143,6 @@ def SignalElement(signal:CanSignal, oid_tag:Optional[Dict[str, str]]=None) -> Da
         kwargs.physMax = "800.0"
     if str(signal.name).startswith("TCU_GrRatioChngProg"):
         kwargs.physMax = "1.0"
-
     kwargs.value = "false" if kwargs.basicModelType == "log" else "0.0" if kwargs.basicModelType == "cont" else "0"
     return elementWrapper(**kwargs)
 
@@ -175,7 +174,7 @@ class MessageElement:
             oid_tag = {}
 
         comment_id = f'{message.name}({message["ID"]})'
-        if message.syscon:
+        if message.syscon and message['ECU'] == "EMS":
             comment_id = f'[{message.syscon}] {comment_id}'
         timer_formula = f"Ti_q{str(message['taskTime']).replace('.', 'p')}_s".replace('p0_s', '_s')
         timer_round = 3 if message["taskTime"] == 0.001 else 2

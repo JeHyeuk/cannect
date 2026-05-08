@@ -108,13 +108,14 @@ class Subversion:
         file = Path(file)
         if not dst:
             dst = file.parent
-        dst = Path(dst) / file.name.replace(".zip", f"-{revision}.zip")
+        ext = str(file).split('.')[-1]
+        dst = Path(dst) / file.name.replace(f".{ext}", f"-{revision}.{ext}")
         command = ['svn', 'export', '-r', str(revision), file, dst, '--force']
 
         try:
             subprocess.run(command, check=True, capture_output=True, text=True)
             if not cls.silence:
-                cls.logger(f"Save {file.name} as {path_abbreviate(dst.parent)}")
+                cls.logger(f'Save "{file.name}" as "{path_abbreviate(dst.parent)}"')
         except subprocess.CalledProcessError as e:
             raise SVNError(f'FAILED TO SAVE REVISION OF {file.name}: {e}')
 

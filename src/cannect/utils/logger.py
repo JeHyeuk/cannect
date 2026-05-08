@@ -10,13 +10,19 @@ class Logger(logging.Logger):
     def kst(cls, *args):
         return time.localtime(time.mktime(time.gmtime()) + 9 * 3600)
 
-    def __init__(self, file:str='', clean_record:bool=False):
+    def __init__(self, file:str='', clean_record:bool=False, **kwargs):
 
-        formatter = logging.Formatter(
-            fmt=f"%(asctime)s %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
-        formatter.converter = self.kst
+        if kwargs.get('datetime', True):
+            formatter = logging.Formatter(
+                fmt=f"%(asctime)s %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"
+            )
+            formatter.converter = self.kst
+        else:
+            formatter = logging.Formatter(
+                fmt=f"%(message)s",
+            )
+
 
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)

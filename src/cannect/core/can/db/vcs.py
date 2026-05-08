@@ -105,7 +105,7 @@ class CANDBVcs:
         source = source[~source["ECU"].isna() & (source["ECU"] != "")]
         source.to_json(jsonpath, orient='index')
         if "xl" in locals():
-            if xl.close_end:
+            if not xl.was_open:
                 xl.wb.Close(SaveChanges=False)
                 time.sleep(1)
                 xl.app.Quit()

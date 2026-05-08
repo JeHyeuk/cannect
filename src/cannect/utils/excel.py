@@ -10,11 +10,11 @@ class ComExcel:
     def __init__(self, file:Union[str, Path], **kwargs):
         try:
             self.app = win32.GetActiveObject("Excel.Application")
-            self.close_end = False
+            self.was_open = True
         except com_error:
             self.app = win32.Dispatch("Excel.Application")
             self.app.Visible = kwargs.get('visible', False)
-            self.close_end = True
+            self.was_open = False
 
         if hasattr(self.app, 'DisplayAlerts'):
             self.app.DisplayAlerts = False
@@ -37,12 +37,17 @@ class ComExcel:
         self.wb.Close(False)
         return
 
-    def to_dataframe(self, sheet) -> DataFrame:
+    def to_dataframe(self, sheet, **kwargs) -> DataFrame:
         if isinstance(sheet, int):
             data = self[sheet].UsedRange.Value
         else:
             data = sheet.UsedRange.Value
-        return DataFrame(data[1:], columns=data[0], index=[n for n in range(2, len(data) + 1)])
+        return DataFrame(
+            data=data[1:],
+            columns=data[0],
+            index=[n for n in range(1, len(data))],
+            dtype=kwargs.get('dtype', None)
+        )
 
 
 
