@@ -1,6 +1,8 @@
 from cannect.core.ir.ir import IntegrationRequest
 from cannect.utils.ppt import PptRW
-import pandas as pd
+from cannect.utils import tools
+from pandas import DataFrame
+from typing import Iterable, List
 import pygetwindow as gw
 import pyautogui as gui
 import time
@@ -8,35 +10,46 @@ import time
 
 class ChangeHistoryManager(PptRW):
 
-    def __init__(self, ir:IntegrationRequest, **kwargs):
-        super().__init__(ir.path.ppt, **kwargs)
+    def __init__(self, ir:IntegrationRequest):
+        ir.logger.log(f'[WRITE PPT ON "{tools.path_abbreviate(ir.deliverables.change_history)}"]')
+        if not ir.is_previous_svn_version_selected():
+            ir.logger.log('! WARNING: PREVIOUS MODEL NOT SELECTED')
+
+        super().__init__(ir.deliverables.change_history)
         self.ir = ir
 
+        ir.logger.log('>>> RESIZING COVER PAGE')
+        self._resize_cover()
+
         # PAGE OVERVIEW: SET FUNCTION LIST
-        self.set_text_in_table(n_slide=1, n_table=2, cell=(3, 2), text=", ".join(ir["FunctionName"]), pos='new')
+        self.set_text_in_table(n_slide=1, n_table=2, cell=(3, 2), text=", ".join(ir.table["FunctionName"]), pos='new')
         self.set_table_font(n_slide=1, n_table=2, cell=(3, 2), size=10)
 
         # PAGE MODEL DESCRIPTION:
-        if ir.is_based():
+        if ir.is_previous_svn_version_selected():
+            ir.logger.log('>>> WRITE ON "SW 기능 상세 설명 - 변경 전"')
             text = ''
-            for n in ir.index:
-                text += f'%{ir.loc[n, "FunctionName"]} <r.{ir.loc[n, "_SCMRev"]}>\x0b\x0b\n'
+            for n in ir.p_table.index:
+                text += f'%{ir.p_table.loc[n, "FunctionName"]} <r.{ir.p_table.loc[n, "SCMRev"]}>\x0b\x0b\n'
             text = text[:-1]
             self.set_text_in_table(n_slide=2, n_table=1, cell=(2, 1), text=text, pos='new')
 
+        ir.logger.log('>>> WRITE ON "SW 기능 상세 설명 - 변경 후"')
         text = ''
-        for n in ir.index:
-            rev = ir.loc[n, "SCMRev"]
-            text += f'%{ir.loc[n, "FunctionName"]} <r.{rev if not pd.isna(rev) else f'{{{n}}}'}>\x0b-\x0b\n'
+        for n in ir.table.index:
+            text += f'%{ir.table.loc[n, "FunctionName"]} <r.{ir.table.loc[n, "SCMRev"]}>\x0b-\x0b\n'
         text = text[:-1]
         self.set_text_in_table(n_slide=2, n_table=1, cell=(2, 2), text=text, pos='new')
 
         # PAGE MODEL DETAILS
+        ir.logger.log('>>> GENERATE SLIDES ')
         self._set_model_slides()
 
-        if ir.is_based():
-            for n in ir.index:
-                name, rev = ir.loc[n, "FunctionName"], ir.loc[n, "_SCMRev"]
+        if ir.is_previous_svn_version_selected():
+            ir.logger('>>> WRITING PREVIOUS MODEL DETAILS...')
+            for n in ir.p_table.index:
+                name, rev = ir.p_table.loc[n, "FunctionName"], ir.p_table.loc[n, "SCMRev"]
+                ir.logger(f'>>> ... {name} @{rev}')
                 slides = self.get_slide_n(f'{name} ')
                 for slide in slides:
                     self.replace_text_in_table(
@@ -44,11 +57,13 @@ class ChangeHistoryManager(PptRW):
                         n_table=1,
                         cell=(1, 1),
                         prev="Rev.",
-                        post=f"Rev.{rev if not pd.isna(rev) else ''}"
+                        post=f"Rev.{rev}"
                     )
 
-        for n in ir.index:
-            name, rev = ir.loc[n, "FunctionName"], ir.loc[n, "SCMRev"]
+        ir.logger('>>> WRITING REVISED MODEL DETAILS...')
+        for n in ir.table.index:
+            name, rev = ir.table.loc[n, "FunctionName"], ir.table.loc[n, "SCMRev"]
+            ir.logger(f'>>> ... {name} @{rev}')
             slides = self.get_slide_n(f'{name} ')
             for slide in slides:
                 self.replace_text_in_table(
@@ -56,7 +71,7 @@ class ChangeHistoryManager(PptRW):
                     n_table=1,
                     cell=(1, 2),
                     prev="Rev.",
-                    post=f"Rev.{rev if not pd.isna(rev) else f'{{{n}}}'}"
+                    post=f"Rev.{rev}"
                 )
             slides = self.get_slide_n(f'{name} / Element')
             for slide in slides:
@@ -64,20 +79,22 @@ class ChangeHistoryManager(PptRW):
                     n_slide=slide,
                     n_table=1,
                     cell=(3, 1),
-                    text='Element 삭제\x0b' + str(ir.loc[n, "ElementDeleted"]).replace("nan", ""),
+                    text='Element 삭제\x0b' + ir.table.loc[n, "ElementDeleted"],
                     pos="new"
                 )
                 self.set_text_in_table(
                     n_slide=slide,
                     n_table=1,
                     cell=(3, 2),
-                    text='Element 추가\x0b' + str(ir.loc[n, "ElementAdded"]).replace("nan", ""),
+                    text='Element 추가\x0b' + ir.table.loc[n, "ElementAdded"],
                     pos="new"
                 )
 
         # WRITE CALIBRATION GUIDE
         if len(ir.parameters) == 0:
             return
+
+        ir.logger('>>> WRITING CALIBRATION PARAMETERS')
 
         n_param = self.get_slide_n('Calibration')[0]
         for n in range(len(ir.parameters) - 1):
@@ -88,14 +105,19 @@ class ChangeHistoryManager(PptRW):
             if len(param) > 3:
                 for _ in range(len(param) - 3):
                     table.Rows.Add()
-
+            table.Columns(1).Width = 5.0 * 28.346
+            table.Columns(2).Width = 7.0 * 28.346
+            table.Columns(3).Width = 4.0 * 28.346
+            table.Columns(5).Width = 2.0 * 28.346
+            table.Columns(6).Width = 2.0 * 28.346
+            table.Columns(7).Width = 2.0 * 28.346
             for r, index in enumerate(param.index, start=1):
                 row = param.loc[index]
                 for c, val in enumerate(row.values, start=1):
                     cell = table.Cell(r + 1, c).Shape
                     cell.TextFrame.TextRange.Text = str(val)
-                    cell.TextFrame.TextRange.Font.Name = "현대산스 Text"
-                    cell.TextFrame.TextRange.Font.Size = 9
+                    cell.TextFrame.TextRange.Font.Name = "현대하모니 L"
+                    cell.TextFrame.TextRange.Font.Size = 10
 
                     cell.TextFrame.TextRange.ParagraphFormat.Alignment = 1 if c == 2 else 2
                     cell.TextFrame.VerticalAnchor = 3
@@ -148,6 +170,29 @@ class ChangeHistoryManager(PptRW):
 
         return
 
+    def _resize_cover(self):
+        """
+        | n ==  7 | n == 3 |
+        | n ==  8 | n == 4 |
+        | n ==  9 | n == 5 |
+        | n == 10 | n == 6 |
+        :return:
+        """
+        for n, shape in enumerate(self.ppt.Slides.Item(1).Shapes, start=1):
+            if shape.HasTable:
+                if n in [7, 8, 9, 10]:
+                    shape.Left = 0.76 * 28.346
+                    shape.Top = {7:2.77, 8:8.1, 9:11.86, 10:15.53}[n] * 28.346
+                if n in [3, 4, 5, 6]:
+                    shape.Width = 22.4 * 28.346
+                    shape.Left = 4.36 * 28.346
+                    shape.Top = {3: 2.77, 4: 8.1, 5: 11.86, 6: 15.53}[n] * 28.346
+                    if n == 3:
+                        shape.Table.Rows(5).Height = 1.69 * 28.346
+                    else:
+                        shape.Height = {4:3.6, 5:3.5, 6:2.36}[n] * 28.346
+
+
     @property
     def title(self) -> str:
         return self.__dict__.get('_title', '')
@@ -159,10 +204,10 @@ class ChangeHistoryManager(PptRW):
         self.set_text_font(n_slide=1, n_shape=1, size=24)
         n_regulation = self.get_slide_n('법규 정합성')
         if n_regulation:
-            self.set_text_in_table(n_slide=n_regulation[0], n_table=2, cell=(1, 2), text=title, pos='new')
+            self.set_text_in_table(n_slide=n_regulation[0], n_table=1, cell=(1, 2), text=title, pos='new')
         n_checklist = self.get_slide_n('SW변경내역서 Check List')
         if n_checklist:
-            self.set_text_in_table(n_slide=n_checklist[0], n_table=2, cell=(1, 2), text=title, pos='new')
+            self.set_text_in_table(n_slide=n_checklist[0], n_table=1, cell=(1, 2), text=title, pos='new')
 
     @property
     def developer(self) -> str:
@@ -173,10 +218,6 @@ class ChangeHistoryManager(PptRW):
         self.__dict__['_developer'] = developer
         self.set_text_in_table(n_slide=1, n_table=1, cell=(2, 1), text=developer, pos='new')
         self.set_table_font(n_slide=1, n_table=1, cell=(2, 1), size=10)
-        user = f'현대케피코\n{developer}'
-        n_checklist = self.get_slide_n('SW변경내역서 Check List')
-        if n_checklist:
-            self.set_text_in_table(n_slide=n_checklist[2], n_table=1, cell=(16, 5), text=user, pos='new')
 
     @property
     def issue(self) -> str:
@@ -185,48 +226,23 @@ class ChangeHistoryManager(PptRW):
     @issue.setter
     def issue(self, issue:str):
         self.__dict__['_issue'] = issue
-        self.set_table_font(n_slide=1, n_table=2, cell=(3, 8), name="현대산스 Text")
+        self.set_table_font(n_slide=1, n_table=2, cell=(3, 8), name="현대하모니 L")
         self.set_text_in_table(n_slide=1, n_table=2, cell=(3, 8), text=issue, pos='new')
 
     @property
     def lcr(self) -> str:
         return self.__dict__.get('_lcr', '')
 
-    @property
-    def lcr_submit_team(self) -> str:
-        return self.__dict__.get('_lcr_submit_team', '')
-
-    @property
-    def lcr_submitter(self) -> str:
-        return self.__dict__.get('_lcr_submitter', '')
-
     @lcr.setter
     def lcr(self, lcr:str):
-        if not lcr:
-            return
         self.__dict__['_lcr'] = lcr
-
         self.set_text_in_table(n_slide=1, n_table=2, cell=(4, 8), text=lcr, pos='before')
-        if self.lcr_submit_team == self.lcr_submitter == '':
-            text = f'(필수 항목) LCR 번호, LCR 제기팀 및 담당자 기재 要'
-        else:
-            text = f'{self.lcr_submit_team} / {self.lcr_submitter}'
-        self.set_text_in_table(n_slide=1, n_table=2, cell=(4, 8), text=text, pos='after')
-
         n_regulation = self.get_slide_n('법규 정합성')
         if n_regulation:
-            self.set_text_in_table(n_slide=n_regulation[0], n_table=2, cell=(1, 4), text=lcr, pos='new')
+            self.set_text_in_table(n_slide=n_regulation[0], n_table=1, cell=(1, 4), text=lcr, pos='new')
         n_checklist = self.get_slide_n('SW변경내역서 Check List')
         if n_checklist:
-            self.set_text_in_table(n_slide=n_checklist[0], n_table=2, cell=(1, 4), text=lcr, pos='new')
-
-    @lcr_submit_team.setter
-    def lcr_submit_team(self, team:str):
-        self.__dict__['_lcr_submit_team'] = team
-
-    @lcr_submitter.setter
-    def lcr_submitter(self, submitter:str):
-        self.__dict__['_lcr_submitter'] = submitter
+            self.set_text_in_table(n_slide=n_checklist[0], n_table=1, cell=(1, 4), text=lcr, pos='new')
 
     @property
     def problem(self) -> str:
@@ -234,40 +250,32 @@ class ChangeHistoryManager(PptRW):
 
     @problem.setter
     def problem(self, problem:str):
-        if not problem:
-            return
         self.set_text_in_table(n_slide=1, n_table=2, cell=(5, 1), text=problem, pos='new')
 
-    @property
-    def cause_requirement(self) -> str:
-        return self.__dict__.get('_cause_requirement', '')
-
-    @cause_requirement.setter
-    def cause_requirement(self, cause_requirement:str):
-        self.set_text_in_table(n_slide=1, n_table=3, cell=(1, 1), text=cause_requirement, pos='new')
-
     def _set_model_slides(self):
+        ir = self.ir.table
         self.set_shape(n_slide=3, n_shape=1, width=26.1 * 28.346, left=0.8 * 28.346)
-        self.set_text_font(n_slide=3, n_shape=1, name="현대산스 Text", size=20)
-        self.set_table_height(n_slide=3, n_table=1, row=2, height=9 * 28.346)
-        self.set_table_height(n_slide=3, n_table=1, row=3, height=5.5 * 28.346)
+        self.set_text_font(n_slide=3, n_shape=1, name="현대하모니 M", size=20)
+        self.set_table_height(n_slide=3, n_table=1, row=2, height=11 * 28.346)
+        self.set_table_height(n_slide=3, n_table=1, row=3, height=3 * 28.346)
         self.set_table_text_align(n_slide=3, n_table=1, cell=(3, 1))
         self.set_table_text_align(n_slide=3, n_table=1, cell=(3, 2))
         self.set_table_font(n_slide=3, n_table=1, cell=(3, 1), size=12)
         self.set_table_font(n_slide=3, n_table=1, cell=(3, 2), size=12)
-        for n in range(3 * len(self.ir) - 1):
+        for n in range(3 * len(ir) - 1):
             self.ppt.Slides(3).Duplicate()
         
         # if self.ppt.SectionProperties.Count == 0:
         #     self.ppt.SectionProperties.AddSection(1, f'기본 구역')
-        for n, model in enumerate(self.ir.index, start=1):
-            n_default = 3 * (n - 1) + 3
-            n_element = 3 * (n - 1) + 4
-            n_formula = 3 * (n - 1) + 5
-            self.ppt.SectionProperties.AddBeforeSlide(n_default, f'%{model}')
-            self.set_text(n_slide=n_default, n_shape=1, text=f'SW 변경 내용 상세: %{model} /', pos='new')
-            self.set_text(n_slide=n_element, n_shape=1, text=f'SW 변경 내용 상세: %{model} / Element', pos='new')
-            self.set_text(n_slide=n_formula, n_shape=1, text=f'SW 변경 내용 상세: %{model} / Implementation', pos='new')
+        for n, i in enumerate(ir.index, start=1):
+            n_default = 3 * i + 3
+            n_element = 3 * i + 4
+            n_formula = 3 * i + 5
+            name = ir.loc[i]["FunctionName"]
+            self.ppt.SectionProperties.AddBeforeSlide(n_default, f'%{name}')
+            self.set_text(n_slide=n_default, n_shape=1, text=f'SW 변경 내용 상세: %{name} /', pos='new')
+            self.set_text(n_slide=n_element, n_shape=1, text=f'SW 변경 내용 상세: %{name} / Element', pos='new')
+            self.set_text(n_slide=n_formula, n_shape=1, text=f'SW 변경 내용 상세: %{name} / Implementation', pos='new')
             self.set_text_in_table(n_slide=n_element, n_table=1, cell=(3, 1), text="Element 삭제\x0b", pos="new")
             self.set_text_in_table(n_slide=n_element, n_table=1, cell=(3, 2), text="Element 추가\x0b", pos="new")
             self.set_text_in_table(n_slide=n_formula, n_table=1, cell=(3, 1), text="Impl. 삭제\x0b", pos="new")

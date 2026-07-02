@@ -1,8 +1,8 @@
 from cannect.config import env
-from cannect.core.can.db2.read import CANDBReader
-from cannect.core.can.db2.schema.styles import CustomStyle
-from cannect.core.can.db2.schema.message import Message
-from cannect.core.subversion import Subversion
+from cannect.core.can.db.read import CANDBReader
+from cannect.core.can.db.schema.styles import CustomStyle
+from cannect.core.can.db.schema.message import Message
+from cannect.core.subversion import SubVersion
 from cannect.utils import tools
 
 from datetime import datetime
@@ -16,6 +16,7 @@ from typing import Union
 import os, time, site
 
 
+SVN = SubVersion(env.SVN_PATH)
 class Specification:
 
     def __init__(self, db:Union[CANDBReader, DataFrame]):
@@ -23,18 +24,17 @@ class Specification:
             db = CANDBReader(db)
         self._db = db
 
-        if not (env.SVN_CANDB / r"사양서/resource").exists():
-            Subversion.update(env.SVN_CANDB / "사양서")
-
-        template = Path(site.getsitepackages()[1]) / 'docx/templates/default.docx'
+        template = env.SVN.CANDB / f'사양서/resource/default.docx'
         if template.exists():
             os.remove(template)
-        tools.copy_to(env.SVN_CANDB / r"사양서/resource/default", template.parent)
+
+        (SVN.CANDB / "사양서").update()
         time.sleep(0.5)
+
         os.rename(template.parent / 'default', template.parent / 'default.docx')
         time.sleep(0.5)
 
-        self._doc = doc = Document()
+        self._doc = doc = Document(template)
         self._style = CustomStyle(doc)
         return
 
@@ -46,7 +46,7 @@ class Specification:
         return
 
     def _set_ci(self):
-        png = env.SVN_CANDB / r"사양서/resource/ci_cover.png"
+        png = env.SVN.CANDB / r"사양서/resource/ci_cover.png"
         paragraph = self._doc.add_paragraph()
         runner = paragraph.add_run()
         runner.add_picture(str(png), width=Inches(6))
@@ -57,7 +57,7 @@ class Specification:
     def _set_overview(self):
         items = {
             'DATABASE': f"자체제어기/EMS CAN/CAN-FD {self._db.rev}",
-            'COMPANY': env.COMPANY,
+            'COMPANY': env.COMPANYNAME,
             'DIVISION': env.DIVISION,
             'RELEASE': datetime.now().strftime("%Y-%m-%d"),
         }
@@ -99,7 +99,7 @@ class Specification:
         left.style = self._style.header_left
 
         right = table.rows[0].cells[2].paragraphs[0]
-        right.text = env.DIVISION + "\n" + env.COMPANY
+        right.text = env.DIVISION + "\n" + env.COMPANYNAME
         right.style = self._style.header_right
         return
 
@@ -132,7 +132,7 @@ class Specification:
         message.addHeading("EMS TRANSMIT")
         transmit = tqdm([obj for _, obj in objs if obj["ECU"] == "EMS"])
         for obj in transmit:
-            transmit.set_description(desc=f"사양서 생성 ... {obj.name}")
+            transmit.set_description(desc=f"write {{ EMS/{obj.name} }} to {filename}")
             message.addMessageHeading(obj)
             message.addMessageSpec(obj)
             message.addMessageLayout(obj)
@@ -142,7 +142,7 @@ class Specification:
         message.addHeading("EMS RECEIVE")
         receive = tqdm([obj for _, obj in objs if obj["ECU"] != "EMS"])
         for obj in receive:
-            receive.set_description(desc=f"사양서 생성 ... {obj.name}")
+            receive.set_description(desc=f"write {{ {obj['ECU']}/{obj.name} }} to {filename}")
             message.addMessageHeading(obj)
             message.addMessageSpec(obj)
             message.addMessageLayout(obj)
@@ -154,7 +154,7 @@ class Specification:
 
 
 if __name__ == "__main__":
-    db = CANDBReader().mode('HEV')
+    db = CANDBReader().by_engine('HEV')
 
     spec = Specification(db)
     spec.generate("TEST CAN SPEC")

@@ -10,16 +10,6 @@ class DataDictionary(Dict[KT, VT]):
     데이터 저장 Dictionary
     built-in: dict의 확장으로 저장 요소에 대해 attribute 접근 방식을 허용
     기본 제공 Alias (별칭): dD, dDict
-
-    사용 예시)
-        myData = DataDictionary(name='JEHYEUK', age=34, division='Vehicle Solution Team')
-        print(myData.name, myData['name'], myData.name == myData['name'])
-
-        /* ----------------------------------------------------------------------------------------
-        | 결과
-        -------------------------------------------------------------------------------------------
-        | JEHYEUK JEHYEUK True
-        ---------------------------------------------------------------------------------------- */
     """
     def __init__(self, data=None, **kwargs):
         super().__init__()
@@ -30,14 +20,7 @@ class DataDictionary(Dict[KT, VT]):
             if isinstance(value, dict):
                 self[key] = DataDictionary(**value)
                 continue
-            if isinstance(value, list):
-                self[key] = value
-                continue
-            try:
-                if os.path.isdir(value) or os.path.isfile(value):
-                    value = Path(value)
-            except TypeError:
-                pass
+            # list나 다른 타입들은 변환 없이 그대로 저장
             self[key] = value
         return
 
@@ -50,13 +33,11 @@ class DataDictionary(Dict[KT, VT]):
         if isinstance(value, dict):
             self[attr] = DataDictionary(**value)
         else:
-            try:
-                if os.path.isdir(value) or os.path.isfile(value):
-                    value = Path(value)
-            except TypeError:
-                pass
             self[attr] = value
         return
 
     def __str__(self) -> str:
         return pprint.pformat(self)
+
+# 별칭 설정
+dD = dDict = DataDictionary

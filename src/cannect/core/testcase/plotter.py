@@ -1,5 +1,5 @@
 from cannect.config import env
-from cannect.core.mdf import MdfReader
+from cannect.core.mdf import MdfFrame
 from pandas import DataFrame, Series
 from plotly.graph_objs import Figure, Layout, Scatter
 import os

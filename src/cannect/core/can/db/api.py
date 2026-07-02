@@ -1,18 +1,14 @@
 from cannect.config import env
-from cannect.core.can.db2.read import CANDBReader
-from cannect.core.can.db2.dbc import to_dbc
-from cannect.core.can.db2.doc import Specification
+from cannect.core.can.db.read import CANDBReader
+from cannect.core.can.db.dbc import to_dbc
+from cannect.core.can.db.doc import Specification
 from cannect.errors import CANDBDuplicationError
+from pathlib import Path
 from typing import Union
 
 class DB(CANDBReader):
 
-    def to_dbc(self, engine_type:str, channel:Union[int, str], **kwargs):
-        if not self.rev.endswith(engine_type):
-            base = self.by_engine(engine_type)
-        else:
-            base = self.copy()
-
+    def to_dbc(self, engine_type:str, channel:Union[int, str], *exclude:str):
         if isinstance(channel, int):
             if engine_type == "HEV":
                 channel = {1:'P', 2:'H', 3:'L'}[channel]
@@ -23,31 +19,30 @@ class DB(CANDBReader):
         if not channel in ['P', 'H', 'L']:
             raise KeyError(f'Unsupported channel: {channel}')
 
-        base = base[base[f'{engine_type} Channel'] == channel]
+        if not self.rev.endswith(engine_type):
+            base = self.by_engine(engine_type)
+        else:
+            base = self.copy()
+            base = base[base[f'{engine_type} Channel'] == channel]
 
-        if 'Codeword' in kwargs:
-            cfg = ''.join([c for c in kwargs['Codeword'][:-2] if not c in ['=', '<', '>', ' ']])
-            mask1 = base['Codeword'].str.replace(" ", "") == kwargs['Codeword'].replace(" ", "")
-            mask2 = (base['Codeword'] == '') | (~base['Codeword'].str.contains(cfg))
-            base = base[mask1 | mask2]
-        if 'SystemConstant' in kwargs:
-            base = base[
-                (base['SystemConstant'].str.replace(" ", "") == kwargs['SystemConstant'].replace(" ", "")) |
-                (base['SystemConstant'] == '')
-            ]
+        if exclude:
+            base = base[~base['Message'].isin(exclude)]
+
+        duplicated = []
         for _id, df in base.groupby("ID"):
             msg = df["Message"].unique()
             if len(msg) > 1:
-                raise CANDBDuplicationError(f'IN CHANNEL: {channel}, ID: "{_id}" IS DUPLICATED BY "{msg.tolist()}", SPECIFY {{Codeword}} or {{SystemConstant}}')
+                duplicated.append((_id, msg))
+        if duplicated:
+            for _id, msg in duplicated:
+                print(f'IN CHANNEL: {channel}, ID: "{_id}" IS DUPLICATED BY: "{msg.tolist()}"')
+            raise CANDBDuplicationError()
 
         if channel == 'L' and engine_type == 'HEV':
             n_channel = '3'
         else:
             n_channel = {'P': 1, 'H': 2, 'L': '2, 3'}[channel]
-        filename = f'{engine_type}-CAN{n_channel}'
-        if kwargs:
-            filename += "-" + "-".join([f'{{{val}}}' for val in kwargs.values()])
-        filename += '.dbc'
+        filename = f'{engine_type}-CAN{n_channel}.dbc'
         to_dbc(env.DOWNLOADS / filename, base)
         return
 
@@ -58,7 +53,7 @@ class DB(CANDBReader):
             base = self.copy()
 
         docx = Specification(base)
-        docx.generate(env.DOWNLOADS / f'{"_".join(base.src.name.split("_")[:-1])}_{db.rev}.docx')
+        docx.generate(f'{"_".join(base.src.split("_")[:-1])}_{base.rev}.docx')
         return
 
 
@@ -66,10 +61,11 @@ class DB(CANDBReader):
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
-    from cannect import mount
-    mount(r"E:\\SVN")
+
 
     db = DB()
+    db.to_developer_mode('HEV')
+    print(db[db['Message'].str.startswith('MCU')])
     # print(db.src)
     # print(db.rev)
     # print(db)
@@ -87,4 +83,5 @@ if __name__ == "__main__":
     # print(db)
     # print(db.is_developer_mode())
 
-    db.to_docx("ICE")
+    # db.to_docx("ICE")
+    # db.to_dbc("HEV", 1, "CVVD1")

@@ -1,7 +1,7 @@
 from cannect.core.ascet.amd import AmdIO, AmdSC
-from cannect.core.subversion import Subversion
+from cannect.core.subversion import SubVersion
 from cannect.config import env
-from cannect.errors import AscetWorspaceFormatError, AmdDuplicationError, AmdNotFoundError
+from cannect.errors import AscetWorkspaceFormatError, AmdDuplicationError, AmdNotFoundError
 from pandas import DataFrame, concat
 from pathlib import Path
 from typing import Union
@@ -9,13 +9,14 @@ from xml.etree.ElementTree import Element, ElementTree
 import os
 
 
+SVN = SubVersion(env.SVN_PATH)
 class WorkspaceIO:
 
     def __init__(self, path:str=""):
-        self.path = path = env.SVN_MODEL if not path else Path(path)
+        self.path = path = SVN.MODEL if not path else Path(path)
 
-        if path == env.SVN_MODEL:
-            fdb = env.SVN_MODEL / '.svn/wc.db'
+        if path == SVN.MODEL:
+            fdb = SVN.MODEL / '.svn/wc.db'
             if not fdb.exists():
                 fdb = r'\\kefico\keti\ENT\SDT\SVN\model\.svn\wc.db'
         else:
@@ -37,8 +38,8 @@ class WorkspaceIO:
             raise AscetWorspaceFormatError('NO .aws OR wc.db IN WORKSPACE DIRECTORY')
 
         if str(fdb).endswith('.db'):
-            db = Subversion.read_wcdb(fdb)
-            db = db[~db["local_relpath"].str.startswith("Personal")]
+            db = SVN.MODEL.inventory
+            db = db[~db["relpath"].str.startswith("Personal")]
             self.dbtype = 'wc'
         else:
             self.dbtype = 'ws'
@@ -51,39 +52,39 @@ class WorkspaceIO:
         return self.find(item)
 
     def __iter__(self):
-        for name, path in self.db[['name', 'local_relpath']].itertuples(index=False):
+        for name, path in self.db[['name', 'relpath']].itertuples(index=False):
             yield name, self.path / path
 
     def find(self, name:str) -> str:
         if self.dbtype == 'ws':
             query = self.db[self.db['name'] == name]
             if len(query) > 1:
-                duplicated = "\n".join(query['local_relpath'])
+                duplicated = "\n".join(query['relpath'])
                 raise AmdDuplicationError(rf'{duplicated}\nMODULE {name} DUPLICATED: SPECIFY PARENT FOLDER')
-            return str(self.path / query.iloc[0]['local_relpath'])
+            return str(self.path / query.iloc[0]['relpath'])
         else:
             if not name.endswith('.zip'):
                 name += '.zip'
             query = self.db[self.db['kind'] == 'file'].copy()
-            query = query[query['local_relpath'].str.endswith(name)]
+            query = query[query['relpath'].str.endswith(name)]
             if query.empty:
                 raise AmdNotFoundError(f'MODULE {name} NOT FOUND')
             if len(query) > 1:
-                duplicated = "\n".join(query['local_relpath'])
+                duplicated = "\n".join(query['relpath'])
                 raise AmdDuplicationError(rf'{duplicated}\nMODULE {name} DUPLICATED: SPECIFY PARENT FOLDER')
-            return str(self.path / query.iloc[0]['local_relpath'])
+            return str(self.path / query.iloc[0]['relpath'])
 
     def find_bc_component(self, n:Union[str, int]):
-        sep = '/' if '/' in self.db.iloc[0]['local_relpath'] else '\\'
+        sep = '/' if '/' in self.db.iloc[0]['relpath'] else '\\'
         bc_name = [bc for bc in os.listdir(self.HNB_GASOLINE) if str(n) in bc]
         if not bc_name:
             raise FileNotFoundError(f'#{n} BC NOT EXIST')
-        bc = self.db[self.db['local_relpath'].str.contains(bc_name[0])]
+        bc = self.db[self.db['relpath'].str.contains(bc_name[0])]
         bc['bc'] = bc_name[0]
-        bc['file'] = bc['local_relpath'].apply(lambda x: x.split(sep)[-1])
+        bc['file'] = bc['relpath'].apply(lambda x: x.split(sep)[-1])
 
         layers = [[] for i in range(10)]
-        for _path in bc['local_relpath']:
+        for _path in bc['relpath']:
             _layers = _path.split(sep)
             _layers = _layers[_layers.index(bc_name[0]) + 1: ]
             for i, _layer in enumerate(_layers):
@@ -101,17 +102,17 @@ class WorkspaceIO:
 
     @property
     def HNB_GASOLINE(self) -> Path:
-        db = self.db[self.db['local_relpath'].str.contains('HNB_GASOLINE')]
+        db = self.db[self.db['relpath'].str.contains('HNB_GASOLINE')]
         if db.empty:
             return self.path / 'HNB_GASOLINE'
-        return self.path / (db.iloc[0]['local_relpath'].split('HNB_GASOLINE')[0] + 'HNB_GASOLINE')
+        return self.path / (db.iloc[0]['relpath'].split('HNB_GASOLINE')[0] + 'HNB_GASOLINE')
 
     @property
     def HMC_ECU_Library(self) -> Path:
-        db = self.db[self.db['local_relpath'].str.contains('HMC_ECU_Library')]
+        db = self.db[self.db['relpath'].str.contains('HMC_ECU_Library')]
         if db.empty:
             return self.path / 'HMC_ECU_Library'
-        return self.path / (db.iloc[0]['local_relpath'].split('HMC_ECU_Library')[0] + 'HMC_ECU_Library')
+        return self.path / (db.iloc[0]['relpath'].split('HMC_ECU_Library')[0] + 'HMC_ECU_Library')
 
     def bcPath(self, n:Union[str, int]) -> str:
         target = [path for path in os.listdir(self.HNB_GASOLINE) if str(n) in path]
@@ -189,19 +190,19 @@ class WorkspaceIO:
         objs = []
         def _iter(tag:Element, obj:dict):
             for sub_tag in list(tag):
-                parent = obj['local_relpath']
+                parent = obj['relpath']
                 if sub_tag.tag == 'folder':
-                    obj['local_relpath'] = f"{parent}/{sub_tag.get('name')}"
+                    obj['relpath'] = f"{parent}/{sub_tag.get('name')}"
                     _iter(sub_tag, obj)
                 if sub_tag.tag == 'itemWithSpec':
                     obj['name'] = name = sub_tag.get('name')
-                    obj['local_relpath'] = file = f"{parent}/{name}.main.amd"
+                    obj['relpath'] = file = f"{parent}/{name}.main.amd"
                     if os.path.exists(Path(self.path) / file):
                         objs.append(obj)
-                obj = {'local_relpath': parent}
+                obj = {'relpath': parent}
 
         for folder in tree.findall('folder'):
-            _iter(folder, {'local_relpath': folder.get('name')})
+            _iter(folder, {'relpath': folder.get('name')})
 
         return DataFrame(objs)
 
@@ -220,8 +221,8 @@ class WorkspaceIO:
 
         amd = AmdIO(str(proj)).dataframe('Element')
         amd = amd[amd['name'] != 'dT']
-        amd = amd[['name', 'componentName']].rename(columns={'componentName': 'local_relpath'})
-        amd['local_relpath'] = amd['local_relpath'].apply(lambda p: f'{p[1:]}.main.amd')
+        amd = amd[['name', 'componentName']].rename(columns={'componentName': 'relpath'})
+        amd['relpath'] = amd['relpath'].apply(lambda p: f'{p[1:]}.main.amd')
         self.db = amd
         return
 
@@ -230,19 +231,27 @@ class WorkspaceIO:
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
-    from cannect import mount
-
-    mount(r"E:\SVN")
 
     io = WorkspaceIO()
-    # print(io.db)
+    print(io.db)
     # print(io["CanHSFPCMD"])
     # print(io.bcPath(33))
     # print(io.bcTree(33))
     # print(io.bcEL(33))
     # print(io.bcIO(33))
 
-    # io.bcIO(33).to_clipboard()
+    for item in io.db.itertuples(index=False):
+        _, kind, _, _, _, path = item
+        if kind == 'file':
+            try:
+                amd = AmdIO(path)
+                obj = dict(
+                    name=amd.name,
+                    OID=amd['OID']
+                )
+                print(obj)
+            except (FileNotFoundError, KeyError, Exception) as e:
+                print(path, e)
 
     # io = WorkspaceIO(r'D:\ETASData\ASCET6.1\Workspaces\TX4TBMTN9LDT@H30_WS54492')
     # io = WorkspaceIO()

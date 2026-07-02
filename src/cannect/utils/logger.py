@@ -23,22 +23,22 @@ class Logger(logging.Logger):
                 fmt=f"%(message)s",
             )
 
-
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
-        console_handler.setFormatter(formatter)
+        super().__init__(name='cannect', level=logging.DEBUG)
+        self.propagate = False
 
         self._buffer = StringIO()
         memory = logging.StreamHandler(stream=self._buffer)
         memory.setLevel(logging.INFO)
         memory.setFormatter(formatter)
+        self.addHandler(memory)
 
-        super().__init__(name='pyems', level=logging.DEBUG)
+        if kwargs.get('console', True):
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.INFO)
+            console_handler.setFormatter(formatter)
+            self.addHandler(console_handler)
 
         self.file = file
-        self.propagate = False
-        self.addHandler(console_handler)
-        self.addHandler(memory)
         if file:
             if os.path.exists(file) and clean_record:
                 os.remove(file)

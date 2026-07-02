@@ -2,40 +2,50 @@ from cannect.config import env
 from cannect.core.ascet.amd import Amd
 from cannect.core.ascet.oid import generateOID
 from cannect.core.ascet.ws import WorkspaceIO
-from cannect.core.can.db.reader import CANDBReader
+from cannect.core.can.db.api import DB
 from cannect.core.can.ascet._db2code import INFO
 from cannect.core.can.rule import naming
+from cannect.core.subversion import SubVersion
 from cannect.errors import CANDBMessageNotFound
 from cannect.utils import tools
 from cannect.utils.logger import Logger
+from cannect.utils.tools import path_abbreviate
 
 from typing import Dict, Tuple
 from xml.etree.ElementTree import Element
 import os, copy
 
-from cannect.utils.tools import path_abbreviate
 
-
+SVN = SubVersion(env.SVN_PATH)
 class CANDiag(Amd):
 
-    def __init__(self, db: CANDBReader, base_model: str='', *messages):
+    def __init__(self, db: DB, base_model: str, *messages):
+        if not os.path.isfile(str(base_model)):
+            base_model = SVN.MODEL[base_model + ('.zip' if not base_model.endswith('.zip') else '')]
+        base = Amd(base_model)
+
+        engine_spec = "HEV" if base.name.endswith("_HEV") or base.name.endswith("_G") else "ICE"
+        exclude_ecus = ["EMS", "CVVD", "MHSG", "NOx"]
+        if engine_spec == "ICE":
+            exclude_ecus += ["BMS", "LDC"]
+        db = db[~db["ECU"].isin(exclude_ecus)]
+
+        if not db.is_developer_mode():
+            db.to_developer_mode(engine_spec)
 
         for message in messages:
             if not message in db.messages:
                 raise CANDBMessageNotFound(f'{message} NOT EXIST IN CAN DB.')
 
-        template = env.SVN_CAN / "CAN_Model/_29_CommunicationVehicle/StandardDB/StandardTemplate/CANDiagTmplt/CANDiagTmplt.main.amd"
+        template = SVN.CAN / "CAN_Model/_29_CommunicationVehicle/StandardDB/StandardTemplate/CANDiagTmplt/CANDiagTmplt.main.amd"
         super().__init__(str(template))
 
-        self.ws = ws = WorkspaceIO()
-        if not os.path.isfile(str(base_model)):
-            base_model = ws[base_model]
-        base = Amd(base_model)
+
 
         # LOGGER 생성
-        self.logger = Logger()
+        self.logger = Logger(console=False)
         self.logger(f"%{{{base.name}}} MODEL GENERATION")
-        self.logger(f">>> DB VERSION: {db.revision}")
+        self.logger(f">>> DB VERSION: {db.rev}")
         self.logger(f">>> BASE MODEL: {tools.path_abbreviate(base_model)}")
 
         # @self.n        : 메시지 순번
@@ -90,7 +100,7 @@ class CANDiag(Amd):
         #    ...
         # </ComponentMain>
         message_list = "[MESSAGE LIST]\n- " + "\n- ".join(self.messages)
-        self.main.find('Component/Comment').text = f"{INFO(self.db.revision)}{message_list}"
+        self.main.find('Component/Comment').text = f"{INFO(self.db.rev)}{message_list}"
 
         # [ Base 모델의 *.main.amd 기본 정보 복사 ]
         # <ComponentMain  toolVersion="V6.1.0-Win10" schemaVersion="6.1.0.0">
@@ -243,7 +253,7 @@ class CANDiag(Amd):
             chn = '2'
         if (str(nm) == "FPCM_01_100ms") or str(nm).startswith("CVVD"):
             chn = '3'
-        if str(nm) in ["Main_Status_Rear", "O2_Rear"]:
+        if str(nm) in ["Main_Status_Rear", "O2_Rear", "NOx1Down", "NOx1Ext"]:
             chn = '3'
 
         # 메시지 진단 타입 별 Hierarchy 복사 및 치환
@@ -486,9 +496,9 @@ CHANNEL     : {db[f'{self.hw} Channel']}-CAN
         return
 
     def _copy_dsm(self):
-        fid_md = Amd(self.ws["Fid_Typ.zip"])
+        fid_md = Amd(SVN.MODEL["Fid_Typ.zip"])
         fid = fid_md.impl.dataframe("ImplementationSet", depth="shallow").set_index("name")["OID"]
-        deve_md = Amd(self.ws["DEve_Typ.zip"])
+        deve_md = Amd(SVN.MODEL["DEve_Typ.zip"])
         deve = deve_md.impl.dataframe("ImplementationSet", depth="shallow").set_index("name")["OID"]
 
         for elem in self.impl.iter('ElementImplementation'):
@@ -629,7 +639,7 @@ CHANNEL     : {db[f'{self.hw} Channel']}-CAN
             self.impl.export_to_downloads()
             self.data.export_to_downloads()
             self.spec.export_to_downloads()
-            with open(os.path.join(env['DOWNLOADS'] / f'{self.name}/log.log'), 'w', encoding='utf-8') as f:
+            with open(os.path.join(env.DOWNLOADS / f'{self.name}/log.log'), 'w', encoding='utf-8') as f:
                 f.write(self.logger.stream)
             self.logger(f'>>> CREATED TO "{path_abbreviate(env.DOWNLOADS / self.name)}" SUCCESS')
         else:
@@ -686,7 +696,7 @@ if __name__ == "__main__":
     }
 
     # proj = WorkspaceIO()
-    data = CANDBReader()
+    data = DB()
     # data = data.to_developer_mode("HEV")
 
     template = CANDiag(data, "CanNOXD", "Main_Status_Rear", "O2_Rear")

@@ -49,10 +49,11 @@ class PptRW:
         except com_error:
             cls.app = win32.Dispatch("PowerPoint.Application")
             cls.app_close = True
-        cls.app.Visible = True
+        if not kwargs.get('visible', True):
+            cls.app.WindowState = 2  # ppWindowMinimized
         return super().__new__(cls)
 
-    def __init__(self, path:str):
+    def __init__(self, path:str, **kwargs):
         if self.app.Presentations.Count > 0:
             for n in range(1, self.app.Presentations.Count + 1):
                 _ppt = self.app.Presentations.Item(n)

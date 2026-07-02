@@ -48,7 +48,7 @@ class AmdSource(object):
         self.name = name = os.path.basename(file).split('.')[0]
         if file.endswith('.zip'):
             if not binary:
-                binary = env.ASCET / "bin"
+                binary = env.ASCET_PATH / "bin"
                 os.makedirs(binary, exist_ok=True)
             tools.unzip(file, binary)
             self.path = path = binary
@@ -57,7 +57,7 @@ class AmdSource(object):
             self.path = os.path.dirname(file)
             self.file = file
         else:
-            raise AmdFormatError
+            raise AmdFormatError(f'"{name}" is not readable amd format: {file}')
         self.main = file
         self.impl = file.replace(".main.amd", ".implementation.amd")
         self.data = file.replace(".main.amd", ".data.amd")

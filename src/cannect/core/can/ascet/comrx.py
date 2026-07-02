@@ -1,13 +1,14 @@
 from cannect.config import env
 from cannect.core.ascet.amd import Amd
 from cannect.core.ascet.ws import WorkspaceIO
-from cannect.core.can.ascet._db2code import MessageCode
-from cannect.core.can.db.reader import CANDBReader
+from cannect.core.can.ascet._db2code import MessageCode, INFO
+from cannect.core.can.db.api import DB
 from cannect.utils.logger import Logger
 from cannect.utils import tools
 
-from typing import Dict
 from pandas import DataFrame
+from pathlib import Path
+from typing import Dict, Union
 import os
 
 
@@ -15,7 +16,7 @@ class ComRx:
 
     def __init__(
         self,
-        db:CANDBReader,
+        db:DB,
         engine_spec:str,
         base_model:str='',
     ):
@@ -23,8 +24,9 @@ class ComRx:
         if engine_spec == "ICE":
             exclude_ecus += ["BMS", "LDC"]
         db = db[~db["ECU"].isin(exclude_ecus)]
+
         if not db.is_developer_mode():
-            db = db.to_developer_mode(engine_spec)
+            db.to_developer_mode(engine_spec)
 
         if base_model:
             name = os.path.basename(base_model).split(".")[0]
@@ -44,12 +46,13 @@ class ComRx:
         self.data = amd.data
         self.spec = spec = amd.spec
 
-        (env.DOWNLOADS / name).mkdir(parents=True, exist_ok=True)
-        self.logger = logger = Logger(env.DOWNLOADS / rf'{name}/log.txt', clean_record=True)
+        # (env.DOWNLOADS / name).mkdir(parents=True, exist_ok=True)
+        # self.logger = logger = Logger(env.DOWNLOADS / rf'{name}/log.log', clean_record=True)
+        self.logger = logger = Logger(clean_record=True, console=False)
         logger.info(f"%{name} MODEL GENERATION")
         logger.info(f">>> Engine Spec : {engine_spec}")
         logger.info(f">>> Base Model  : {tools.path_abbreviate(base_model)}")
-        logger.info(f">>> DB Revision : {db.revision}")
+        logger.info(f">>> DB Revision : {db.rev}")
 
         prev = {
             method.attrib['methodName']: method.find('CodeBlock').text
@@ -100,24 +103,32 @@ class ComRx:
             method.find('CodeBlock').text = curr.get(name, "")
         return
 
-    def generate(self):
-        self.main.export_to_downloads()
-        self.impl.export_to_downloads()
-        self.data.export_to_downloads()
-        self.spec.export_to_downloads()
+    def generate(self, path:Union[str, Path]=None):
+        self.main.find('Component/Comment').text = INFO(self.db.rev)
+        if path is None:
+            self.main.export_to_downloads()
+            self.impl.export_to_downloads()
+            self.data.export_to_downloads()
+            self.spec.export_to_downloads()
+            with open(env.DOWNLOADS / rf'{self.name}/log.log', 'w', encoding='utf-8') as f:
+                f.write(self.logger.stream)
+        else:
+            self.main.export(str(path))
+            self.impl.export(str(path))
+            self.data.export(str(path))
+            self.spec.export(str(path))
+            with open(Path(path) / 'log.log', 'w', encoding='utf-8') as f:
+                f.write(self.logger.stream)
         return
 
 
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
-    from cannect.config import mount
-
-    mount(r"E:\\SVN")
 
 
-    # db = CANDBReader()
-    db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21812@02.json')
+    db = DB()
+    # db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21812@02.json')
 
 
     engine_spec = "HEV"
@@ -138,6 +149,6 @@ if __name__ == "__main__":
         db=db,
         engine_spec=engine_spec,
         # base_model="",
-        base_model=env.ASCET / f"Export/ComRx_G/ComRx_G.main.amd"
+        # base_model=env.ASCET / f"Export/ComRx_G/ComRx_G.main.amd"
     )
     model.generate()

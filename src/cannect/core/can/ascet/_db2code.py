@@ -10,12 +10,12 @@ import pandas as pd
 import re
 
 
-INFO = lambda revision: f"""* COMPANY: {env['COMPANY']}
-* DIVISION: {env['DIVISION']}
-* AUTHOR: {env['USERNAME']}
+INFO = lambda revision: f"""* COMPANY: {env.COMPANY_NAME}
+* DIVISION: {env.DIVISION_NAME}
+* AUTHOR: {env.USERNAME}
 * CREATED: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 * DB VERSION: {revision}
-{env["COPYRIGHT"]} 
+{env.COPYRIGHT} 
 
 THIS MODEL IS AUTO-GENERATED.
 """
@@ -192,11 +192,10 @@ class MessageCode:
         "EW": "Event On Write",
     }
 
-    def __init__(self, message:CanMessage, exclude_tsw:bool=True):
+    def __init__(self, message:CanMessage):
         self.message = message
         self.name = name = str(message.name)
-        self.names = naming(self.name)
-        self.exclude_tsw = exclude_tsw
+        self.names = naming(self.name, chn=message['Channel'])
 
         self.srv_name = lambda md: f"#define COMPILE_UNUSED__{md.upper()}_IMPL__{name}"
         return
@@ -253,33 +252,13 @@ class MessageCode:
 
     @property
     def def_name(self) -> str:
-        chn = "PL2" if self["Channel"] == "H" else "PL1" if self["Channel"] == "L" else "P"
-        bsw = f"CAN_MSGNAME_{self['Message']}_{chn}"
-        if self["Message"] == "IMU_01_10ms":
-            bsw = "CAN_MSGNAME_YRS_01_10ms_P"
-        if self["Message"] == "EGSNXUpStream_Data":
-            bsw = "CAN_MSGNAME_EGSNXUpStream_B1_data_1"
-        if self["Message"] == "EGSNXUpStream_Req":
-            bsw = "CAN_MSGNAME_EGSNXUpStream_B1_Rqst"
-        if self["Message"] == "HCU_11_P_00ms":
-            bsw = "CAN_MSGNAME_HCU_11_00ms_P"
-        if self["Message"] == "HCU_11_H_00ms":
-            bsw = "CAN_MSGNAME_HCU_11_00ms_PL2"
-        if self["Message"] == "MCU_01_H_10ms":
-            bsw = "CAN_MSGNAME_MCU_01_10ms_PL2"
-        if self["Message"] == "MCU_01_P_10ms":
-            bsw = "CAN_MSGNAME_MCU_01_10ms_P"
-        if self["Message"] == "MCU_02_H_10ms":
-            bsw = "CAN_MSGNAME_MCU_02_10ms_PL2"
-        if self["Message"] == "MCU_02_P_10ms":
-            bsw = "CAN_MSGNAME_MCU_02_10ms_P"
-        if self["Message"].startswith("M2S") or self["Message"].startswith("S2M"):
-            rename = "_".join([frac for frac in self["Message"].split("_") if not "ms" in frac])
-            bsw = f"CAN_MSGNAME_{rename}_PL1"
-        if self.message.isTsw() and self.exclude_tsw:
-            bsw = 255
+        bsw = self.names.bsw
         asw = f'MSGNAME_{self.names.tag}'
-        return f"#define {asw}\t{bsw}"
+        return f"""#ifdef {bsw}
+    #define {asw}\t{bsw}
+#else
+    #define {asw}\t255
+#endif"""
 
     @property
     def struct(self) -> str:
@@ -468,16 +447,16 @@ cntvld( &{names.messageCountValid}, &{names.messageCountTimer}, {names.counter},
  SEND TYPE\t\t: {send_type[self["Send Type"]]}
  CHANNEL\t\t\t: {self["Channel"]}-CAN
 -------------------------------------------------- */"""
-        if self["SystemConstant"]:
-            syntax += f"\n#if ( {self['SystemConstant']} )"
-        if self["Codeword"]:
-            syntax += f"\nif ( {self['Codeword']} ) {{"
-            i += 1
+        # if self["SystemConstant"]:
+        #     syntax += f"\n#if ( {self['SystemConstant']} )"
+        # if self["Codeword"]:
+        #     syntax += f"\nif ( {self['Codeword']} ) {{"
+        #     i += 1
         syntax += f"\n{tab * i}{model.upper()}_IMPL__{self['Message']}();\n"
-        if self["Codeword"]:
-            syntax += f"}}\n"
-        if self["SystemConstant"]:
-            syntax += f"#endif\n"
+        # if self["Codeword"]:
+        #     syntax += f"}}\n"
+        # if self["SystemConstant"]:
+        #     syntax += f"#endif\n"
         return syntax
 
     @classmethod

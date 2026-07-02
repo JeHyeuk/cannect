@@ -2,4 +2,4 @@ from .datadictionary import DataDictionary
 
 
 # Alias
-dD = DD = DataDictionary
+dD = DD = DataDict = DataDictionary

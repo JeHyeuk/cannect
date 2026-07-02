@@ -7,7 +7,7 @@ class AmdFormatError(Exception):
 class AmdNotFoundError(Exception):
     pass
 
-class AscetWorspaceFormatError(Exception):
+class AscetWorkspaceFormatError(Exception):
     pass
 
 class CANDBError(Exception):
@@ -19,7 +19,22 @@ class CANDBDuplicationError(Exception):
 class CANDBMessageNotFound(Exception):
     pass
 
-class InternalServerError(Exception):
+class CodeBeamerError(Exception):
+    pass
+
+class IRFormatError(Exception):
+    pass
+
+class SDDError(Exception):
+    pass
+
+class SDDLogError(Exception):
+    pass
+
+class SDDNotFoundError(FileNotFoundError):
+    pass
+
+class SDDOutOfDateError(Exception):
     pass
 
 class SVNError(Exception):

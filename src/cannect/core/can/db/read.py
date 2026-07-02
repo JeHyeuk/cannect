@@ -1,5 +1,5 @@
-from cannect.core.can.db2.schema.keys import CAN_DB_KEYS
-from cannect.core.can.db2.vcs import CANDBVcs
+from cannect.core.can.db.schema.keys import CAN_DB_KEYS
+from cannect.core.can.db.vcs import CANDBVcs
 from cannect.schema.candb import CanSignal, CanMessage
 from cannect.schema.datadictionary import DataDictionary
 from cannect.utils.deco import single_arg_constraint
@@ -11,7 +11,7 @@ import pandas as pd
 
 class CANDBReader(DataFrame):
 
-    _metadata = ["src", "rev"]
+    _metadata = ["official", "rev", "src"]
 
     @classmethod
     def typecast(cls, raw_db:DataFrame) -> DataFrame:
@@ -40,12 +40,14 @@ class CANDBReader(DataFrame):
     ):
         if isinstance(base, str):
             vcs = CANDBVcs(base)
-            self.src = src = vcs if not rev else vcs[rev]
+            self.src = base
             self.rev = vcs.log.revision[0] if not rev else vcs.check_revision(rev)
-            data = pd.read_json(src, orient='index')
+            self.official = kwargs.get('official', True)
+            data = pd.read_json(vcs if not rev else vcs[rev], orient='index')
         elif isinstance(base, DataFrame):
             self.src = kwargs.get('src', '<pandas; DataFrame>')
             self.rev = rev
+            self.official = kwargs.get('official', False)
             data = base
         else:
             raise TypeError('읽을 수 없는 형식의 CAN DB 입니다.')
@@ -71,7 +73,12 @@ class CANDBReader(DataFrame):
 
     @single_arg_constraint("ICE", "HEV")
     def by_engine(self, engine_type:str):
-        self.rev += f'@{engine_type}'
+        if self.rev.endswith(f'@{engine_type}'):
+            pass
+        elif '@' in self.rev:
+            self.rev = self.rev.split('@')[0] + f'@{engine_type}'
+        else:
+            self.rev += f'@{engine_type}'
         return self[self[f'{engine_type} Channel'] != ""]
 
     def is_developer_mode(self):
@@ -128,8 +135,6 @@ class CANDBReader(DataFrame):
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
-    from cannect import mount
-    mount(r"E:\\SVN")
 
     db = CANDBReader()
     print(db.src)

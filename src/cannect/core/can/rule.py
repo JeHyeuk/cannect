@@ -16,7 +16,7 @@ MESSAGE_RENAME = {
 }
 class naming(object):
 
-    def __init__(self, message: Union[str, Dict, Series, Hashable], hw:str='ICE'):
+    def __init__(self, message: Union[str, Dict, Series, Hashable], hw:str='ICE', chn:str='P'):
 
         if isinstance(message, Series) or isinstance(message, Dict):
             self.message = message["Message"]
@@ -42,6 +42,30 @@ class naming(object):
             self.message = f"L_{self.message[1:]}"
         if self.message in MESSAGE_RENAME:
             self.message = MESSAGE_RENAME[self.message]
+
+        chn = "PL2" if chn == "H" else "PL1" if chn == "L" else "P"
+        self.bsw = f"CAN_MSGNAME_{self.message}_{chn}"
+        if self.message == "IMU_01_10ms":
+            self.bsw = "CAN_MSGNAME_YRS_01_10ms_P"
+        if self.message == "EGSNXUpStream_Data":
+            self.bsw = "CAN_MSGNAME_EGSNXUpStream_B1_data_1"
+        if self.message == "EGSNXUpStream_Req":
+            self.bsw = "CAN_MSGNAME_EGSNXUpStream_B1_Rqst"
+        if self.message == "HCU_11_P_00ms":
+            self.bsw = "CAN_MSGNAME_HCU_11_00ms_P"
+        if self.message == "HCU_11_H_00ms":
+            self.bsw = "CAN_MSGNAME_HCU_11_00ms_PL2"
+        if self.message == "MCU_01_H_10ms":
+            self.bsw = "CAN_MSGNAME_MCU_01_10ms_PL2"
+        if self.message == "MCU_01_P_10ms":
+            self.bsw = "CAN_MSGNAME_MCU_01_10ms_P"
+        if self.message == "MCU_02_H_10ms":
+            self.bsw = "CAN_MSGNAME_MCU_02_10ms_PL2"
+        if self.message == "MCU_02_P_10ms":
+            self.bsw = "CAN_MSGNAME_MCU_02_10ms_P"
+        if self.message.startswith("M2S") or self.message.startswith("S2M"):
+            rename = "_".join([frac for frac in self.message.split("_") if not "ms" in frac])
+            self.bsw = f"CAN_MSGNAME_{rename}_PL1"
 
 
         """

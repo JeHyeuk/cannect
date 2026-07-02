@@ -1,5 +1,5 @@
 from cannect.config import env
-from cannect.core.mdf import MdfReader
+from cannect.core.mdf import MdfFrame
 from cannect.core.testcase.style import Style
 from cannect.core.testcase.plotter import Plot
 from numpy import nan
@@ -35,7 +35,7 @@ LABEL = {
     "ER-Value": '',
     "Test Result": '',
     "Test Result Description": '',
-    "Test Conductor": f"{env.USER} @HYUNDAI-KEFICO",
+    "Test Conductor": f"{env.USERNAME} @{env.COMPANY_NAME}",
     "Test SW": '',
     "Test HW": '',
     "Test Vehicle / Engine / HIL": '',
@@ -61,7 +61,7 @@ LABEL = {
 class UnitTestCase(Series):
 
     __wb__:Workbook = None
-    __dr__:MdfReader = None
+    __dr__:MdfFrame = None
     __pg__:str = ''
 
     def __init__(self, **kwargs):
@@ -83,13 +83,13 @@ class UnitTestCase(Series):
         self.__wb__ = workbook
 
     @property
-    def mdf(self) -> MdfReader:
+    def mdf(self) -> MdfFrame:
         return self.__dr__
 
     @mdf.setter
-    def mdf(self, mdf:Union[str, MdfReader]):
+    def mdf(self, mdf:Union[str, MdfFrame]):
         if isinstance(mdf, str):
-            self.__dr__ = MdfReader(mdf)
+            self.__dr__ = MdfFrame(mdf)
         else:
             self.__dr__ = mdf
         self["Measure / Log File (.dat)"] = os.path.basename(self.__dr__.file)

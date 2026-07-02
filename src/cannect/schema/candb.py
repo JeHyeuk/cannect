@@ -97,6 +97,7 @@ class CanSignal(object):
     def isCrc(self) -> bool:
         return (("crc" in self.name.lower()) and (self["StartBit"] == 0)) or \
                ("checksum" in self.name.lower()) or \
+               ("cyclicredundancycheck" in self.name.lower()) or \
                ("chks" in self.name.lower()) or \
                (self.name.startswith("VVDIN_EMS_CRC")) or \
                (self.name.startswith("VVDIN_CRC"))
@@ -234,8 +235,7 @@ if __name__ == "__main__":
     # print(sig)
 
     msg = CanMessage(rdb[rdb["Message"] == 'PT_OBM_01_1000ms'])
-    print(msg)
-    print(msg.hasAliveCounter())
-    print(msg.syscon)
-    print(msg.codeword)
-
+    # print(msg)
+    # print(msg.hasAliveCounter())
+    # print(msg.syscon)
+    # print(msg.codeword)

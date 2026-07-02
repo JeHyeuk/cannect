@@ -1,19 +1,18 @@
 from cannect.config import env
-from cannect.core.can.db.schema import standardize
-from cannect.core.subversion import Subversion
-from cannect.errors import CANDBError
-from cannect.utils.excel import ComExcel
+from cannect.core.subversion import SubVersion
+from cannect.core.can.db.util import spec_excel_to_dataframe
+from cannect.errors import SVNError
+from cannect.utils.deco import single_arg_constraint
+from cannect.utils.logger import Logger
 from cannect.utils.tools import path_abbreviate
 
-from datetime import datetime
-from pandas import DataFrame
 from pathlib import Path
-from pyperclip import paste
-from typing import Callable
-import os, time
+from typing import Union
+import os
 
 
-class CANDBVcs:
+SVN = SubVersion(env.SVN_PATH)
+class CANDBVcs(Path):
     """
     CAN DB Version Control System
     RPA를 위한 CAN DB 버전 시스템이다. json 포맷으로 구성된 데이터파일에 대한 버전이며
@@ -21,116 +20,81 @@ class CANDBVcs:
     구동하는 호스트내 경로를 입력하여야 한다. 경로는 환경변수로 관리하거나 HMG 보안 처리된
     서버가 Check-Out된 경로를 사용한다.
     """
-    silence :bool     = False
-    logger  :Callable = print
+    def __getitem__(self, rev:Union[int, str]):
+        rev = self.check_revision(rev)
+        json = [f for f in self if f.startswith(f'{self.base}_{rev}')]
+        if not json:
+            # svn.logger(f'No json found for {{ {self.base} {rev} }}, auto generating...')
+            json = self.create(rev)
+            # svn.logger(f'>>> Generated to {{ {path_abbreviate(json)} }}')
+            return json
 
-    @classmethod
-    def clipbd2db(cls) -> DataFrame:
-        """
-        사용자가 Excel DB를 클립보드로 복사한 경우, 클립보드 내용을 DataFrame으로 변환
-        :return:
-        """
-        clipboard = [row.split("\t") for row in paste().split("\r\n")]
-        source = DataFrame(data=clipboard[1:], columns=standardize(clipboard[0]))
-        source = source[~source["ECU"].isna() & (source["ECU"] != "")]
-        file = env.DOWNLOADS / "manual_candb.json"
-        source.to_json(file, orient='index')
-        cls.logger("Manually Updated CAN DB from clipboard.")
-        cls.logger(f"- Saved as : {file}")
-        return source
+        return SVN.CANDB / f'dev/{json[-1]}'
 
+    @single_arg_constraint(
+        "자체제어기_KEFICO-EMS_CANFD",
+        "자체제어기_KEFICO-EMS_고속CAN",
+        "G-PROJECT_KEFICO-EMS_CANFD",
+    )
+    def __init__(self, base:str='자체제어기_KEFICO-EMS_CANFD'):
+        # svn.logger = console = Logger(datetime=False)
 
-    def __init__(self, filename:str=''):
-        if not filename:
-            filename = "자체제어기_KEFICO-EMS_CANFD.xlsx"
-        if not filename.endswith('.xlsx'):
-            filename += '.xlsx'
+        self.base = base
+        self.file = file = SVN.CANDB / f'{base}.xlsx'
+        # self.log = log = svn.log(file)
+        self.log = log = file.log()
 
-        filepath = env.SVN_CANDB / filename
-        if not filepath.exists():
-            raise CANDBError(f'{filename} NOT EXISTS')
-
-        self.name     = '.'.join(filename.split(".")[:-1])
-        self.filename = filename
-        self.filepath = filepath
-        self.history  = history = Subversion.log(filepath)
-        self.revision = history.iloc[0, 0]
+        json = [f for f in self if log.revision[0] in f]
+        if not json:
+            # svn.logger(f'No json found for {{ {self.base} {log.revision[0]} }}, auto generating...')
+            json = self.create()
+            # svn.logger(f'>>> Generated to {{ {path_abbreviate(json)} }}')
+            super().__init__('_json', json)
+        else:
+            super().__init__('_json', SVN.CANDB / f'dev/{json[-1]}')
         return
 
-    def _find_jsons(self) -> DataFrame:
-        data = []
-        for file in os.listdir((env.SVN_CANDB / "dev")):
-            if not file.endswith('.json'):
-                continue
-            if file.startswith(self.name) and file.endswith('.json'):
-                path = env.SVN_CANDB / f'dev/{file}'
-                data.append({
-                    'revision': file.split("_")[-1].replace(".json", ""),
-                    'datetime': datetime.fromtimestamp(os.path.getmtime(path)),
-                    'name': file,
-                    'path': path,
-                })
-        return DataFrame(data=data)
+    def __iter__(self):
+        for f in os.listdir(SVN.CANDB / 'dev'):
+            if f.startswith(self.base):
+                yield f
 
-    @property
-    def json(self) -> Path:
-        """
-        Excel CAN DB에 대한 최신 json 파일의 경로
-        :return:
-        """
-        jsons = self._find_jsons()
-        if jsons.empty:
-            raise CANDBError(f'NO MATCHED JSON DB FOR {{{self.filename}}} IN SVN')
+    def check_revision(self, rev:Union[int, str]) -> str:
+        if isinstance(rev, int) or (not rev.startswith('r')):
+            rev = f'r{rev}'
+        if not rev in self.log.revision.values:
+            raise SVNError(f'"{self.base}.xlsx <r.{rev}>"가 없습니다. Revision을 확인하세요.')
+        return rev
 
-        jsons = jsons[jsons['name'].str.startswith(f'{self.name}_{self.revision}')] \
-                .sort_values(by='revision', ascending=False)
-        if jsons.empty:
-            raise CANDBError(f'NO MATCHED JSON DB FOR {{{self.filename}}} @{{{self.revision}}} IN SVN')
-        return Path(jsons.iloc[0]['path'])
+    def create(self, rev:Union[int, str]=''):
+        if not rev:
+            rev = self.log.revision[0]
+            src = self.file
+        else:
+            rev = self.check_revision(rev)
+            svn.silence = True
+            svn.save_revision_to(self.file, str(rev).replace('r', ''), SVN.CANDB)
+            src = str(self.file).replace(".xlsx", f"-{str(rev).replace('r', '')}.xlsx")
 
-    def to_json(self, mode:str='auto'):
-        if mode == 'auto':
-            xl = ComExcel(self.filepath)
-            xl.ws.UsedRange.Copy()
+        json = [f for f in self if f.startswith(f'{self.base}_{rev}')]
+        if not json:
+            json = SVN.CANDB / f'dev/{self.base}_{rev}@01.json'
+        else:
+            json, count = tuple(json[-1].split('@'))
+            json = SVN.CANDB / f'dev/{json}@{str(int(count.split('.')[0]) + 1).zfill(2)}.json'
 
-        try:
-            jsonpath = self.json
-            rev = str(int(jsonpath.name.split("@")[-1].split(".")[0]) + 1).zfill(2)
-            jsonpath = jsonpath.parent / f"{self.name}_{self.revision}@{rev}.json"
-        except CANDBError:
-            jsonpath = env.SVN_CANDB / f'dev/{self.name}_{self.revision}@01.json'
+        spec_excel_to_dataframe(src).to_json(json, orient='index')
+        return json
 
-        clipboard = [row.split("\t") for row in paste().split("\r\n")]
-        source = DataFrame(data=clipboard[1:], columns=standardize(clipboard[0]))
-        source = source[~source["ECU"].isna() & (source["ECU"] != "")]
-        source.to_json(jsonpath, orient='index')
-        if "xl" in locals():
-            if not xl.was_open:
-                xl.wb.Close(SaveChanges=False)
-                time.sleep(1)
-                xl.app.Quit()
-        if not self.silence:
-            self.logger("Manually Updated CAN DB from clipboard.")
-            self.logger(f"- Saved as : {path_abbreviate(jsonpath)}")
-        return
-
-    def commit_json(self):
-        # TODO
-        Subversion.add(self.json)
-        Subversion.commit(self.json, message=f"[CANNECT] AUTO-COMMIT CAN JSON - {self.revision}")
-        return
 
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
+
     from cannect import mount
+    mount(r"E:\SVN")
 
-    mount(r"E:\\SVN")
-
-    cdb = CANDBVcs(r"자체제어기_KEFICO-EMS_CANFD.xlsx")
-    # cdb = CANDBVcs(r"G-PROJECT_KEFICO-EMS_CANFD.xlsx")
-    # print(cdb.revision)
-    cdb.to_json()
-    print(cdb.json)
-
-    # cdb.commit_json()
+    vcs = CANDBVcs()
+    print(vcs.name)
+    print(vcs)
+    print(vcs[21612])

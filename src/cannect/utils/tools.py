@@ -33,24 +33,29 @@ def unzip(src: Union[str, Path], to: Union[str, Path] = "") -> bool:
         raise KeyError(f"src: {src}는 .zip 압축 파일만 입력할 수 있습니다.")
     return True
 
-def zip(path:Union[str, Path]):
-    name = os.path.basename(path)
+def zip(path:Union[str, Path], outer:bool=False, overwrite:bool=False):
+    path = Path(path)
+    name = path.name
+    if outer:
+        path = path.parent
+    if overwrite and (path / f'{name}.zip').exists():
+        os.remove(path / f'{name}.zip')
     shutil.make_archive(name, "zip", root_dir=path)
     shutil.move(f'{name}.zip', path)
-    return
+    return path / f'{name}.zip'
 
-def copy_to(file:Union[str, Path], dst:Union[str, Path]) -> str:
-    if os.path.isfile(str(file)):
+def copy_to(src:Union[str, Path], dst:Union[str, Path]) -> str:
+    if os.path.isfile(str(src)):
         os.chmod(dst, stat.S_IWRITE)
-        os.chmod(file, stat.S_IWRITE)
-        shutil.copy(file, dst)
+        os.chmod(src, stat.S_IWRITE)
+        shutil.copy(src, dst)
     else:
-        shutil.copytree(file, dst, dirs_exist_ok=True)
+        shutil.copytree(src, dst, dirs_exist_ok=True)
     # if '.' in os.path.basename(file):
     #     shutil.copy(file, dst)
     # else:
     #     shutil.move(file, dst)
-    return os.path.join(dst, os.path.basename(file))
+    return os.path.join(dst, os.path.basename(src))
 
 def find_file(root:Union[str, Path], filename:Union[str, Path]) -> Union[str, List[str]]:
     """
@@ -62,13 +67,13 @@ def find_file(root:Union[str, Path], filename:Union[str, Path]) -> Union[str, Li
             if _file == filename:
                 found.append(os.path.join(_root, _file))
     if not found:
-        return ""
+        raise FileNotFoundError(Path(root) / filename)
     if len(found) == 1:
         return found[0]
     return found
 
 
-def clear(path: str, leave_path: bool = True):
+def clear(path: Union[str, Path], leave_path: bool = True):
     """
     지정한 경로의 파일 및 하위 디렉토리를 모두 삭제
 
@@ -219,3 +224,7 @@ class KeywordSearch:
 
 def compare_dataframe(x:DataFrame, y:DataFrame) -> DataFrame:
     return
+
+
+if __name__ == "__main__":
+    print("test\vhello")

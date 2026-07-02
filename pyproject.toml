@@ -14,6 +14,7 @@ dependencies = [
     "mdfreader",
     "numpy",
     "pandas",
+    "playwright",
     "plotly",
     "psutil",
     "pya2ldb",
@@ -26,5 +27,5 @@ dependencies = [
     "python-pptx",
     "pywin32",
     "tqdm",
-    "xlsxwriter"
+    "xlsxwriter",
 ]

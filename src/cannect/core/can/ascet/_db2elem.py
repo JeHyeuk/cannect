@@ -4,6 +4,7 @@ from cannect.core.ascet.amd import AmdElements
 from cannect.core.ascet.formula import formula_dictionary
 from cannect.core.can.ascet import _db2code
 from cannect.core.can.rule import naming
+from cannect.core.subversion import SubVersion
 from cannect.schema.candb import CanMessage, CanSignal
 from cannect.schema.datadictionary import DataDictionary
 from cannect.utils.tools import xml
@@ -13,6 +14,7 @@ from xml.etree.ElementTree import Element
 import math
 
 
+SVN = SubVersion(env.SVN_PATH)
 F = None
 def elementWrapper(**kwargs) -> DataDictionary:
     return DataDictionary(
@@ -72,7 +74,7 @@ def crcClassElement(n:Union[int, str], oid_tag:Optional[Dict[str, str]]=None) ->
 def SignalElement(signal:CanSignal, oid_tag:Optional[Dict[str, str]]=None) -> DataDictionary:
     global F
     if F is None:
-        F = formula_dictionary(env.SVN_CAN / "CAN_Model/Formula/HNB_I4GDI_I4MPI.xml")
+        F = formula_dictionary(SVN.CAN / "CAN_Model/Formula/HNB_I4GDI_I4MPI.xml")
 
     if not oid_tag:
         oid_tag = {}

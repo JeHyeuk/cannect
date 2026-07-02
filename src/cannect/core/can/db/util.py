@@ -1,5 +1,5 @@
 from cannect.utils.excel import ComExcel
-from cannect.core.can.db2.schema.keys import CAN_DB_KEYS
+from cannect.core.can.db.schema.keys import CAN_DB_KEYS
 
 from pandas import DataFrame, Index
 from pathlib import Path
@@ -34,7 +34,7 @@ def refactor_db_keys(columns: Union[Index, List]) -> List:
     return standard_keys
 
 
-def excel_to_dataframe(excel_path: Union[Path, str]) -> DataFrame:
+def spec_excel_to_dataframe(excel_path: Union[Path, str]) -> DataFrame:
     """
     Excel CAN DB(SPEC)을 읽어 pandas DataFrame으로 변환한다.
     * Excel 응용프로그램이 미실행 상태에서 실행하는 경우 작업 후 응용프로그램을 종료한다.
@@ -78,4 +78,4 @@ if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
 
-    print(excel_to_dataframe(r"E:\SVN\dev.bsw\hkmc.ems.bsw.docs\branches\HEPG_Ver1p1\11_ProjectManagement\CAN_Database\자체제어기_KEFICO-EMS_CANFD.xlsx"))
+    print(spec_excel_to_dataframe(r"E:\SVN\dev.bsw\hkmc.ems.bsw.docs\branches\HEPG_Ver1p1\11_ProjectManagement\CAN_Database\자체제어기_KEFICO-EMS_CANFD.xlsx"))

@@ -2,13 +2,14 @@ from cannect.config import env
 from cannect.core.ascet.amd import Amd
 from cannect.core.ascet.ws import WorkspaceIO
 from cannect.core.can.ascet import _db2code, _db2elem
-from cannect.core.can.db.reader import CANDBReader
+from cannect.core.can.db import DB
 from cannect.schema.datadictionary import DataDictionary
 from cannect.utils.logger import Logger
 from cannect.utils import tools
 
-from typing import Any, Union, Tuple
+from pathlib import Path
 from pandas import DataFrame
+from typing import Any, Union, Tuple
 import os, copy
 
 
@@ -16,19 +17,18 @@ class ComDef:
 
     def __init__(
         self,
-        db:CANDBReader,
+        db:DB,
         engine_spec:str,
         base_model:str='',
-        exclude_tsw:bool=True,
+        **kwargs
     ):
         exclude_ecus = ["EMS", "CVVD", "MHSG", "NOx"]
         if engine_spec == "ICE":
             exclude_ecus += ["BMS", "LDC"]
         db = db[~db["ECU"].isin(exclude_ecus)]
+
         if not db.is_developer_mode():
-            db = db.to_developer_mode(engine_spec)
-        if exclude_tsw:
-            db = db[db["Status"] != "TSW"]
+            db.to_developer_mode(engine_spec)
 
         if base_model:
             name = os.path.basename(base_model).split(".")[0]
@@ -48,13 +48,13 @@ class ComDef:
         self.data = amd.data
         self.spec = amd.spec
 
-        (env.DOWNLOADS / name).mkdir(exist_ok=True, parents=True)
-        self.logger = logger = Logger(env.DOWNLOADS / rf'{name}/log.txt', clean_record=True)
+        # (env.DOWNLOADS / name).mkdir(exist_ok=True, parents=True)
+        # self.logger = logger = Logger(env.DOWNLOADS / rf'{name}/log.log', clean_record=True)
+        self.logger = logger = Logger(clean_record=True, console=kwargs.get('console', False))
         logger.info(f"%{name} MODEL GENERATION")
         logger.info(f">>> Engine Spec : {engine_spec}")
         logger.info(f">>> Base Model  : {tools.path_abbreviate(base_model)}")
-        logger.info(f">>> DB Revision : {db.revision}")
-        logger.info(f">>> Exclude TSW : {'Yes' if exclude_tsw else 'No'}")
+        logger.info(f">>> DB Revision : {db.rev}")
 
         """
         변경 전 모델 요소 수집
@@ -71,7 +71,7 @@ class ComDef:
         """
         logger.run()
         self.ME = {name: _db2elem.MessageElement(obj, oid_tag=oids) for name, obj in db.messages.items()}
-        self.MC = {name: _db2code.MessageCode(obj, exclude_tsw) for name, obj in db.messages.items()}
+        self.MC = {name: _db2code.MessageCode(obj) for name, obj in db.messages.items()}
         logger.end(">>> Defining Message Elements...")
 
         logger.run()
@@ -79,15 +79,14 @@ class ComDef:
         logger.end(">>> Defining Signal Elements...")
         return
 
-    def generate(self):
-        self.main.find('Component/Comment').text = _db2code.INFO(self.db.revision)
+    def generate(self, path:Union[str, Path]=None):
+        self.main.find('Component/Comment').text = _db2code.INFO(self.db.rev)
         self._define_elements('MethodSignature')
         self._define_elements('Element')
         self._define_elements('ImplementationEntry')
         self._define_elements('DataEntry')
         self._define_elements('HeaderBlock')
         self._define_elements('MethodBody')
-        self._export()
 
         curr = self._collect_properties()
         deleted = list(set(self.prev.Elements['name']) - set(curr.Elements['name']))
@@ -105,6 +104,7 @@ class ComDef:
                          desc.to_string() + '\n' + \
                          f'* Added: {", ".join(added)}' + '\n' + \
                          f'* Deleted: {", ".join(deleted)}')
+        self._export(path)
         return
 
     def _collect_properties(self) -> DataDictionary:
@@ -206,25 +206,33 @@ class ComDef:
         parent.append(getattr(_db2elem.crcClassElement(8, self.oids), tag))
         return
 
-    def _export(self):
-        self.main.export_to_downloads()
-        self.impl.export_to_downloads()
-        self.data.export_to_downloads()
-        self.spec.export_to_downloads()
+    def _export(self, path:Union[str, Path]=None):
+        if path is None:
+            self.main.export_to_downloads()
+            self.impl.export_to_downloads()
+            self.data.export_to_downloads()
+            self.spec.export_to_downloads()
+            with open(env.DOWNLOADS / rf'{self.name}/log.log', 'w', encoding='utf-8') as f:
+                f.write(self.logger.stream)
+        else:
+            self.main.export(str(path))
+            self.impl.export(str(path))
+            self.data.export(str(path))
+            self.spec.export(str(path))
+            with open(Path(path) / 'log.log', 'w', encoding='utf-8') as f:
+                f.write(self.logger.stream)
         return
 
 
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
-    from cannect.config import mount
-    mount(r"E:\\SVN")
 
 
-    db = CANDBReader()
+    db = DB()
     # db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21815@01.json')
 
-    engine_spec = "ICE"
+    engine_spec = "HEV"
 
     # DB CUSTOMIZE ------------------------------------------------------
     # exclude_ecus = ["EMS", "CVVD", "MHSG", "NOx"]
@@ -246,10 +254,10 @@ if __name__ == "__main__":
     model = ComDef(
         db=db,
         engine_spec=engine_spec,
-        exclude_tsw=True,
         # base_model="",
         # base_model=r'D:\SVN\model\ascet\trunk\HNB_GASOLINE\_29_CommunicationVehicle\StandardDB\NetworkDefinition\ComDef\ComDef-22368\ComDef.main.amd'
         # base_model=ENV['ASCET_EXPORT_PATH']
         # base_model=env.ASCET / f"Export/ComDef_G/ComDef_G.main.amd"
+        console=True
     )
     model.generate()
