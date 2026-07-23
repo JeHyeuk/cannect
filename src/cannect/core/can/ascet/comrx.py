@@ -54,6 +54,10 @@ class ComRx:
         logger.info(f">>> Base Model  : {tools.path_abbreviate(base_model)}")
         logger.info(f">>> DB Revision : {db.rev}")
 
+        unwanted_tag = spec.strictFind('CodeVariant', target="Default")
+        if len(unwanted_tag):
+            spec.findParent(unwanted_tag)[unwanted_tag].remove(unwanted_tag)
+
         prev = {
             method.attrib['methodName']: method.find('CodeBlock').text
             for method in list(spec.strictFind('CodeVariant', target="G_HMCEMS").find('MethodBodies'))
@@ -131,7 +135,7 @@ if __name__ == "__main__":
     # db = CANDBReader(env.SVN_CANDB / rf'dev/G-PROJECT_KEFICO-EMS_CANFD_r21812@02.json')
 
 
-    engine_spec = "HEV"
+    engine_spec = "ICE"
 
     # DB CUSTOMIZE ------------------------------------------------------
     # db = db[db["Status"] != "TSW"] # TSW 제외
@@ -149,6 +153,6 @@ if __name__ == "__main__":
         db=db,
         engine_spec=engine_spec,
         # base_model="",
-        # base_model=env.ASCET / f"Export/ComRx_G/ComRx_G.main.amd"
+        base_model=env.ASCET_PATH / f"Export/ComRx/ComRx.main.amd"
     )
     model.generate()

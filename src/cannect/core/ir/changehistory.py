@@ -1,3 +1,4 @@
+from cannect.schema.datadictionary import DataDictionary
 from cannect.core.ir.ir import IntegrationRequest
 from cannect.utils.ppt import PptRW
 import pandas as pd
@@ -9,81 +10,80 @@ import time
 class ChangeHistoryManager(PptRW):
 
     def __init__(self, ir:IntegrationRequest, **kwargs):
-        super().__init__(ir.path.ppt, **kwargs)
+        super().__init__(ir.sc.src.ppt.src, **kwargs)
         self.ir = ir
-
-        # PAGE OVERVIEW: SET FUNCTION LIST
-        self.set_text_in_table(n_slide=1, n_table=2, cell=(3, 2), text=", ".join(ir["FunctionName"]), pos='new')
-        self.set_table_font(n_slide=1, n_table=2, cell=(3, 2), size=10)
-
-        # PAGE MODEL DESCRIPTION:
-        if ir.is_based():
-            text = ''
-            for n in ir.index:
-                text += f'%{ir.loc[n, "FunctionName"]} <r.{ir.loc[n, "_SCMRev"]}>\x0b\x0b\n'
-            text = text[:-1]
-            self.set_text_in_table(n_slide=2, n_table=1, cell=(2, 1), text=text, pos='new')
-
-        text = ''
-        for n in ir.index:
-            rev = ir.loc[n, "SCMRev"]
-            text += f'%{ir.loc[n, "FunctionName"]} <r.{rev if not pd.isna(rev) else f'{{{n}}}'}>\x0b-\x0b\n'
-        text = text[:-1]
-        self.set_text_in_table(n_slide=2, n_table=1, cell=(2, 2), text=text, pos='new')
 
         # PAGE MODEL DETAILS
         self._set_model_slides()
 
-        if ir.is_based():
-            for n in ir.index:
-                name, rev = ir.loc[n, "FunctionName"], ir.loc[n, "_SCMRev"]
-                slides = self.get_slide_n(f'{name} ')
-                for slide in slides:
-                    self.replace_text_in_table(
-                        n_slide=slide,
-                        n_table=1,
-                        cell=(1, 1),
-                        prev="Rev.",
-                        post=f"Rev.{rev if not pd.isna(rev) else ''}"
-                    )
+        # PAGE OVERVIEW: SET FUNCTION LIST
+        self.set_text_in_table(n_slide=1, n_table=2, cell=(3, 2), text=", ".join(ir.data["FunctionName"]), pos='new')
+        self.set_table_font(n_slide=1, n_table=2, cell=(3, 2), size=10)
 
-        for n in ir.index:
-            name, rev = ir.loc[n, "FunctionName"], ir.loc[n, "SCMRev"]
-            slides = self.get_slide_n(f'{name} ')
+        # PAGE MODEL DESCRIPTION:
+        text = DataDictionary(prev='', curr='')
+        cals = []
+        for md in ir.data.index:
+            p_rev = ir.sc.svn[md].model.rev
+            if not p_rev:
+                p_rev = '-'
+            c_rev = ir.data.loc[md, "SCMRev"]
+            if pd.isna(c_rev) or not c_rev:
+                c_rev = f'{{--{md}--}}'
+
+            text.prev += f'%{md} <r.{p_rev}>\x0b\x0b\n'
+            text.curr += f'%{md} <r.{c_rev}>\x0b-\x0b\n'
+
+
+            slides = self.get_slide_n(f'{md} ')
             for slide in slides:
+                self.replace_text_in_table(
+                    n_slide=slide,
+                    n_table=1,
+                    cell=(1, 1),
+                    prev="Rev.",
+                    post=f"Rev.{p_rev}"
+                )
+
                 self.replace_text_in_table(
                     n_slide=slide,
                     n_table=1,
                     cell=(1, 2),
                     prev="Rev.",
-                    post=f"Rev.{rev if not pd.isna(rev) else f'{{{n}}}'}"
+                    post=f"Rev.{c_rev}"
                 )
-            slides = self.get_slide_n(f'{name} / Element')
+
+            slides = self.get_slide_n(f'{md} / Element')
             for slide in slides:
                 self.set_text_in_table(
                     n_slide=slide,
                     n_table=1,
                     cell=(3, 1),
-                    text='Element 삭제\x0b' + str(ir.loc[n, "ElementDeleted"]).replace("nan", ""),
+                    text='Element 삭제\x0b' + str(ir.data.loc[md, "ElementDeleted"]),
                     pos="new"
                 )
                 self.set_text_in_table(
                     n_slide=slide,
                     n_table=1,
                     cell=(3, 2),
-                    text='Element 추가\x0b' + str(ir.loc[n, "ElementAdded"]).replace("nan", ""),
+                    text='Element 추가\x0b' + str(ir.data.loc[md, "ElementAdded"]),
                     pos="new"
                 )
 
+            if 'param' in ir.inst[md]:
+                cals.append(ir.inst[md].param)
+        self.set_text_in_table(n_slide=2, n_table=1, cell=(2, 1), text=text.prev[:-1], pos='new')
+        self.set_text_in_table(n_slide=2, n_table=1, cell=(2, 2), text=text.curr[:-1], pos='new')
+
         # WRITE CALIBRATION GUIDE
-        if len(ir.parameters) == 0:
+        if len(cals) == 0:
             return
 
         n_param = self.get_slide_n('Calibration')[0]
-        for n in range(len(ir.parameters) - 1):
+        for n in range(len(cals) - 1):
             self.ppt.Slides(n_param).Duplicate()
 
-        for n, param in enumerate(ir.parameters):
+        for n, param in enumerate(cals):
             table = self._get_table(n_param + n, 1)
             if len(param) > 3:
                 for _ in range(len(param) - 3):
@@ -260,7 +260,7 @@ class ChangeHistoryManager(PptRW):
         
         # if self.ppt.SectionProperties.Count == 0:
         #     self.ppt.SectionProperties.AddSection(1, f'기본 구역')
-        for n, model in enumerate(self.ir.index, start=1):
+        for n, model in enumerate(self.ir.data.index, start=1):
             n_default = 3 * (n - 1) + 3
             n_element = 3 * (n - 1) + 4
             n_formula = 3 * (n - 1) + 5

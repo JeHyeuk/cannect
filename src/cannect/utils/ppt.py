@@ -67,16 +67,12 @@ class PptRW:
         for i in range(1, self.ppt.Slides.Count + 1):
             yield self.ppt.Slides.Item(i)
 
-    def _get_table(self, n_slide:int, n_table:int):
-        slide = self.ppt.Slides.Item(n_slide)
-        n = 0
-        for shape in slide.Shapes:
-            if shape.HasTable:
-                n += 1
-                if not n == n_table:
-                    continue
-                return shape.Table
-        raise com_error(f'Table Not Found')
+    def close(self):
+        self.ppt.Save()
+        self.ppt.Close()
+        if self.app_close:
+            self.app.Quit()
+        return
 
     def get_slide_n(self, title:str) -> List:
         ns = []
@@ -92,6 +88,21 @@ class PptRW:
                     ns.append(n)
         return ns
 
+    def get_table(self, n_slide:int, n_table:int):
+        slide = self.ppt.Slides.Item(n_slide)
+        n = 0
+        for shape in slide.Shapes:
+            if shape.HasTable:
+                n += 1
+                if not n == n_table:
+                    continue
+                return shape.Table
+        raise com_error(f'Table Not Found')
+
+    def get_table_text(self, n_slide:int, n_table:int, cell:tuple):
+        return self.get_table(n_slide, n_table) \
+               .Cell(*cell).Shape.TextFrame.TextRange.Text
+
     def set_shape(self, n_slide:int, n_shape:int, width:float=None, height:float=None, left=None, top=None):
         if width:
             self.ppt.Slides.Item(n_slide).Shapes(n_shape).Width = width
@@ -104,7 +115,7 @@ class PptRW:
         return
 
     def set_table_height(self, n_slide:int, n_table:int, row:int, height:float):
-        self._get_table(n_slide, n_table).Rows(row).Height = height
+        self.get_table(n_slide, n_table).Rows(row).Height = height
         return
 
     def set_table_text_align(
@@ -115,7 +126,7 @@ class PptRW:
         horizontal:int=1,
         vertical:int=1
     ):
-        cell = self._get_table(n_slide, n_table).Cell(*cell)
+        cell = self.get_table(n_slide, n_table).Cell(*cell)
         # text_frame =
         # text_range = text_frame.TextRange
 
@@ -133,7 +144,7 @@ class PptRW:
         bold:bool=None,
         color:str=None,
     ):
-        font = self._get_table(n_slide, n_table).Cell(*cell).Shape.TextFrame.TextRange.Font
+        font = self.get_table(n_slide, n_table).Cell(*cell).Shape.TextFrame.TextRange.Font
         if name is not None:
             font.Name = name
         if size is not None:
@@ -189,7 +200,7 @@ class PptRW:
         text:str,
         pos:str='new'
     ):
-        table = self._get_table(n_slide, n_table)
+        table = self.get_table(n_slide, n_table)
         if pos.lower() == 'after':
             table.Cell(cell[0], cell[1]).Shape.TextFrame.TextRange.InsertAfter(text)
         elif pos.lower() == 'before':
@@ -206,22 +217,13 @@ class PptRW:
         prev:str,
         post:str
     ):
-        self._get_table(n_slide, n_table) \
+        self.get_table(n_slide, n_table) \
             .Cell(cell[0], cell[1]) \
             .Shape \
             .TextFrame \
             .TextRange \
             .Replace(prev, post)
         return
-
-    def close(self):
-        self.ppt.Save()
-        self.ppt.Close()
-        if self.app_close:
-            self.app.Quit()
-        return
-
-
 
 
 if __name__ == "__main__":

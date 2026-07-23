@@ -17,6 +17,7 @@ dependencies = [
     "playwright",
     "plotly",
     "psutil",
+    "py7zr",
     "pyodbc",
     "pya2ldb",
     "pyautogui",

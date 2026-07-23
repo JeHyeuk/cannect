@@ -48,11 +48,17 @@ class AmdSource(object):
         self.name = name = os.path.basename(file).split('.')[0]
         if file.endswith('.zip'):
             if not binary:
-                binary = env.ASCET_PATH / "bin"
+                binary = env.ASCET_PATH / f"bin/{name}"
                 os.makedirs(binary, exist_ok=True)
             tools.unzip(file, binary)
             self.path = path = binary
-            self.file = file = os.path.join(binary, f'{name}.main.amd')
+            file = None
+            for f in os.listdir(binary):
+                if f.endswith('.main.amd'):
+                    file = binary / f
+            if file is None:
+                raise FileNotFoundError(f'*.main.amd not found in "{binary}"')
+            self.file = file = str(file)
         elif file.endswith('.main.amd'):
             self.path = os.path.dirname(file)
             self.file = file
@@ -585,8 +591,9 @@ class AmdIO(ElementTree):
     def findParent(self, *elems:Element) -> Dict[Element, Element]:
         parents = []
         for parent in self.iter():
-            for child in list(parent):
-                if any([id(child) == id(elem) for elem in elems]):
+            for child in parent:
+                # if any([id(child) == id(elem) for elem in elems]):
+                if any(child is elem for elem in elems):
                     parents.append(parent)
         return dict(zip(elems, parents))
 
@@ -635,6 +642,10 @@ class Amd:
         self.data = AmdIO(sc.data)
         self.spec = AmdIO(sc.spec)
         return
+
+    def __iter__(self):
+        for obj in [self.main, self.impl, self.data, self.spec]:
+            yield obj
 
 
 # Alias

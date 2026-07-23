@@ -141,6 +141,8 @@ class CodeBeamer:
             )
 
             if response.status == 200:
+                if "만료된 암호 변경" in await response.text():
+                    raise CodeBeamerError('Expired CodeBeamer password')
                 data = await response.json()
                 await browser.close()
                 return data
@@ -253,6 +255,14 @@ class CodeBeamer:
         return normalize_codebeamer_text(
             self._search(self._editable, name="요구사항")
         )
+
+async def cb_tester(item):
+    cb = await CodeBeamer.create(
+        item=item,  # Text ONLY Case
+        user_id=env.CODEBEAMER_ID,
+        user_pw=env.CODEBEAMER_PW
+    )
+    return cb
 
 if __name__ == "__main__":
     from pandas import set_option

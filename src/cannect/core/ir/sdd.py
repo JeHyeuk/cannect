@@ -1,63 +1,37 @@
-from cannect.config import env
-from cannect.core.subversion import SubVersion
-from cannect.utils.tools import unzip, zip
+from cannect.errors import (
+    SDDError,
+    SDDLogError,
+    SDDNotFoundError,
+    SDDOutOfDateError
+)
+from cannect.utils import tools
+from datetime import datetime
+from functools import cached_property
 from pandas import DataFrame
 from pathlib import Path
-from datetime import datetime
-import string, re
+from striprtf.striprtf import rtf_to_text
+from typing import Union
+import os, re, string
 
 
-SVN = SubVersion(env.SVN_PATH)
 class SddRW:
 
-    @classmethod
-    def decode_rtf(cls, rtf_content):
-        """RTF 내부의 유니코드 및 CP949 16진수 코드를 한글로 복원하고 서식을 제거합니다."""
+    @staticmethod
+    def remove_pict_groups(text):
+        """
+        rtf 파일에서 사진 제거: 완벽히 동작하지 않음
+        :param text:
+        :return:
+        """
+        new = []
+        for frac in text.split("\\pict"):
+            if "\\bin" in frac:
+                frac = frac[:frac.find("}\\par") + len("}\\par")]
+            new.append(frac)
+        return "".join(new)
 
-        # 1. RTF 유니코드 에스케이프 (\u12345? 또는 \u-12345?) 복원
-        # RTF 유니코드는 16비트 부호 있는 정수(음수 가능)로 표현되며 뒤에 대체 문자(보통 '?')가 붙습니다.
-        def unicode_replace(match):
-            val = int(match.group(1))
-            if val < 0:
-                val += 65536  # 음수 값을 부호 없는 16비트 정수로 변환
-            try:
-                return chr(val)
-            except ValueError:
-                return ""
-
-        # \u숫자 뒤에 오는 대체 문자 1글자(보통 '?')까지 함께 매칭하여 실제 한글로 치환
-        text = re.sub(r"\\u(-?\d+).", unicode_replace, rtf_content)
-        text = re.sub(r"\\u(-?\d+)", unicode_replace, text)
-
-        # 2. RTF 16진수 에스케이프 (\'c7\'d1 등) 복원 (CP949 한글 처리)
-        # 연속된 16진수 바이트 코드를 모아서 한 번에 CP949로 디코딩합니다.
-        hex_pattern = re.compile(r"((?:\\'[0-9a-fA-F]{2})+)")
-
-        def hex_replace(match):
-            hex_str = match.group(1).replace("\\'", "")
-            try:
-                # 한국어 윈도우 RTF는 보통 CP949 인코딩을 사용합니다.
-                return bytes.fromhex(hex_str).decode("cp949")
-            except Exception:
-                try:
-                    return bytes.fromhex(hex_str).decode("utf-8", errors="ignore")
-                except Exception:
-                    return ""
-
-        text = hex_pattern.sub(hex_replace, text)
-
-        # 3. RTF 서식 태그 제거
-        # 줄바꿈 태그(\par, \line)는 실제 줄바꿈(\n)으로 변경
-        text = re.sub(r"\\(par|line)\b", "\n", text)
-        # 나머지 컨트롤 워드 제거 (\f0, \fs24 등)
-        text = re.sub(r"\\([a-z]{1,32})(-?\d{1,10})?[ ]?", "", text)
-        # 중괄호 { } 제거
-        text = re.sub(r"[{}]", "", text)
-
-        return text.replace("?", "")
-
-    @classmethod
-    def _encode_rtf(cls, text: str, fallback: str = "?") -> str:
+    @staticmethod
+    def encode_rtf(text: str, fallback: str = "?") -> str:
         out = []
         for ch in text:
             if ch in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] or \
@@ -65,179 +39,310 @@ class SddRW:
                     ch.lower() in string.ascii_lowercase:
                 out.append(ch)
             elif ch == '\n':
-                out.append(r'\r\n')
+                out.append('\\par\n')
             else:
                 code = ord(ch)
                 code = str(code)
                 out.append(f"\\u{code}{fallback}")
         return "".join(out)
 
-    @classmethod
-    def read_rtf(cls, file_path):
-        """파일 인코딩 오류를 방지하기 위해 여러 인코딩으로 읽기를 시도합니다."""
-        # 한국어 윈도우 환경의 기본 인코딩인 cp949로 먼저 시도
-        try:
-            with open(file_path, "r", encoding="cp949", errors='ignore') as f:
-                return f.read()
-        except UnicodeDecodeError:
-            pass
+    def __init__(self, file:Union[str, Path]):
+        file = Path(file)
 
-        # 실패 시 utf-8로 시도
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                return f.read()
-        except UnicodeDecodeError:
-            pass
+        # FunctionDefinition.rtf 파일 수배
+        # 없는 경우 오류 처리
+        if not str(file).endswith('.rtf'):
+            try:
+                file = Path(tools.find_file(file, 'FunctionDefinition.rtf'))
+            except (FileNotFoundError, Exception):
+                raise SDDNotFoundError(f'sdd not found error: {file}')
+        if not file.exists():
+            raise SDDNotFoundError(f'sdd not found error: {file}')
 
-        # 둘 다 실패 시 바이트 손실이 없는 latin-1로 읽음 (RTF 제어문자는 모두 ASCII 영역이므로 안전)
-        with open(file_path, "r", encoding="latin-1") as f:
-            return f.read()
+        # 2016년 이전 SDD 파일을 자동으로 수정하려는 경우 오류 처리
+        # 형식 불일치로 수기 수정 필요
+        mtime = datetime.fromtimestamp(
+            os.path.getmtime(file)
+        )
+        if mtime.year <= 2016:
+            raise SDDOutOfDateError(f'too old sdd file: "{file}" @{mtime.strftime("%Y-%m-%d")}')
 
-    @classmethod
-    def get_ver(cls, context:str):
-        if not ("[" in context and "]" in context):
-            return ""
-        return context[context.find("[")+1 : context.find("]")]
+        # Attributes
+        self.file = file
+        self.has_picture = False
+        self.created_by = ''
+        self.created_date = ''
+        self.content = content = self.rtf2text(file)
 
-
-    def __init__(self, model:str, oid:str, **kwargs):
-        """
-        :param model: ASCET 모델 이름
-        :param oid: SDD 노트 이름(ASCET 모델 Object ID)
-        """
-        self.model = model.replace("%", "")
-        self.name = name = oid.replace('.zip', '') if oid.endswith('.zip') else oid
-        self.svn = svn = SVN.SDD[f'{name}.zip']
-        path = Path(kwargs.get('path', env.SERVER_TEMP))
-        if self.svn is None:
-            self.rtf = path / f'{oid}/FunctionDefinition.rtf'
-            self.rtf.parent.mkdir(parents=True, exist_ok=True)
-            self.content = self.write(**kwargs)
-        else:
-            unzip(str(svn), path)
-            self.rtf = rtf = next(
-                (path / name).rglob('FunctionDefinition.rtf'),
-                None
-            )
-            self.content = self.decode_rtf(self.read_rtf(rtf))
+        self._n_desc = 0
+        self._iter = content.splitlines()
         return
 
-    def __iter__(self):
-        for line in self.content.splitlines():
-            yield line.strip()  # 앞뒤 공백 제거
+    def _find_log_by_regex(self):
+        pattern = re.compile(
+            r'^\s*\[?(?P<ver>\d+\.\d+\.\d+)\]?\s*(?P<comment>.*?)(?=^\s*\[?\d+\.\d+\.\d+\]?\s*|\Z)',
+            re.DOTALL | re.MULTILINE
+        )
 
-    def __str__(self):
-        return self.content
+        rows = []
+        for m in pattern.finditer(self.content):
+            ver = m.group('ver')
+            comment = m.group('comment').strip()
+            rows.append([ver, comment])
 
-    @property
-    def created_by(self) -> str:
-        try:
-            for l in self:
-                if "createby" in l:
-                    return l.replace("createby", "").strip()
-            return env.USERNAME
-        except (AttributeError, Exception):
-            return env.USERNAME
+        return DataFrame(rows, columns=['ver', 'comment']) \
+               .sort_values(by=['ver'], ascending=False, ignore_index=True)
 
-    @property
-    def created_date(self) -> str:
-        try:
-            for l in self:
-                if "createdate" in l:
-                    return l.replace("createdate", "").strip()
-            return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        except (AttributeError, Exception):
-            return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    @property
-    def desc(self):
-        ver = self.ver
-        get = False
-        obj = []
-        for l in self:
-            if ver in l:
-                get = not get
+    def _find_log_by_table(self) -> DataFrame:
+        data, columns = [], []
+        flag = False
+        row = ''
+        for line in self:
+            if flag and not line:
+                break
+            if "|" in line:
+                flag = True
+            if flag and not line.endswith("|"):
+                row = line if not row else (row + f'\n{line}')
                 continue
-            if get:
-                if obj and obj[-1] == l:
+            if flag and line.endswith("|"):
+                row = line if not row else (row + f'\n{line}')
+                if not columns:
+                    columns = row.split("|")
+                    flag = True
+                else:
+                    data.append(row.split("|"))
+                row = ''
+
+        try:
+            if len(columns) != len(set(columns)):
+                seen, new = {}, []
+                for x in columns:
+                    if x in seen:
+                        seen[x] += 1
+                        new.append(f"{x}_{seen[x]}")
+                    else:
+                        seen[x] = 0
+                        new.append(x)
+                columns = new
+            df = DataFrame(data=data, columns=columns)
+        except (IndexError, ValueError, Exception):
+            raise SDDLogError(f'unable to parse sdd log')
+
+        if '' in df.columns:
+            df.drop(columns=[''], inplace=True)
+        if not all(['.' in c for c in df[df.columns[0]]]):
+            df.drop(columns=[df.columns[0]], inplace=True)
+        if all([not c for c in df[df.columns[-1]]]):
+            df.drop(columns=[df.columns[-1]], inplace=True)
+        if len(df.columns) > 2:
+            df = df[[df.columns[0], df.columns[-1]]] \
+                .rename(columns={df.columns[0]: 'ver', df.columns[-1]: 'comment'})
+        df.sort_values(by=df.columns[0], ascending=False, ignore_index=True, inplace=True)
+        if df.empty or (not re.findall(r'\d+\.\d+\.\d+', df.iloc[0, 0])):
+            raise SDDLogError(f'unable to parse sdd log')
+        return df
+
+    def rtf2text(self, file:Union[str, Path]):
+        kwargs = {'encoding': '', 'errors':'ignore'}
+        for enc in ['cp949', 'euc-kr', 'utf-8']:
+            kwargs['encoding'] = enc
+            with open(file, mode='r', **kwargs) as infile:
+                try:
+                    read = infile.read()
+                    match = re.search(r'createby.*?staticval (\d+)', read)
+                    if match:
+                        self.created_by = match.group(1)
+                    match = re.search(r'createdate.*?staticval\s+((\d+)-(\d+)-(\d+)\s+(\d+):(\d+):(\d+))', read)
+                    if match:
+                        self.created_date = match.group(1)
+                    if '\\pict' in read:
+                        self.has_picture = True
+                        read = self.remove_pict_groups(read)
+                    return rtf_to_text(read, **kwargs)
+                except (UnicodeDecodeError, Exception):
                     continue
-                obj.append(l)
-        if obj[-1] in ["", " ", "\n"]:
-            obj = obj[:-1]
-        return "\n".join(obj[:-1])
+        raise UnicodeError(f'unable to decode file: {file}')
+
+    def write(self, user:str, dst:Union[str, Path]=''):
+        time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        logs = [
+            f"\\plain\\f0\\fs20{self.encode_rtf(f'[{v}] {c}')}\\par"
+            for v, c in self.log.itertuples(index=False)
+        ]
+        text = rf"""{{\rtf1\ansi\deff0\uc1\ansicpg949\deftab720{{\fonttbl{{\f0\fnil\fcharset1 Arial;}}{{\f1\fnil\fcharset2 Wingdings;}}{{\f2\fnil\fcharset2 Symbol;}}}}{{\colortbl\red0\green0\blue0;\red255\green0\blue0;\red0\green128\blue0;\red0\green0\blue255;\red255\green255\blue0;\red255\green0\blue255;\red128\green0\blue128;\red128\green0\blue0;\red0\green255\blue0;\red0\green255\blue255;\red0\green128\blue128;\red0\green0\blue128;\red255\green255\blue255;\red192\green192\blue192;\red128\green128\blue128;\red0\green0\blue0;}}\wpprheadfoot1\paperw11906\paperh16838\margl567\margr624\margt850\margb850\headery720\footery720\endnhere\sectdefaultcl{{\*\generator WPTools_6.250;}}{{\*\userprops {{\propname oid}}\proptype30{{\staticval 040g1j9410g01q871c90dpcrfer3k}}
+{{\propname userid}}\proptype30{{\staticval {user}}}
+{{\propname filename}}\proptype30{{\staticval FunctionDefinition.rtf}}
+{{\propname createby}}\proptype30{{\staticval {self.created_by or user}}}
+{{\propname createdate}}\proptype30{{\staticval {self.created_date or time}}}
+{{\propname updateby}}\proptype30{{\staticval {user}}}
+{{\propname updatedate}}\proptype30{{\staticval {time}}}
+}}{{\plain\f0\fs20 %{self.name} [{self.ver}]\par
+\pard\plain\plain\f0\fs20\par
+\plain\f0\fs20{self.encode_rtf(self.description)}\par
+{"\n".join(logs)}
+}}}}"""
+
+        with open(str(dst) or self.file, 'w') as f:
+            f.write(text)
+        return text
 
     @property
-    def log(self) -> DataFrame:
-        data = []
-        for l in self:
-            if "[" in l and "]" in l:
-                ver = self.get_ver(l)
-                log = l[l.find(']')+1:].strip()
-                if log:
-                    data.append((ver, log))
-        return DataFrame(data, columns=['ver', 'log'])
+    def first_line(self) -> str:
+        for line in self:
+            if line:
+                return line
+        raise SDDError(f'sdd format error: empty sdd "{self.file}"')
+
+    @cached_property
+    def name(self) -> str:
+        first_line = self.first_line
+        if '%' in first_line:
+            matches = re.findall(r'%\s*\S+', first_line)
+            if (len(matches) > 1) or (not matches):
+                raise SDDError(f'first line format error: "{first_line}"')
+            name = matches[0].replace("%", "").strip()
+            if '[' in name:
+                name = name.split('[')[0].strip()
+            return name
+        return first_line.replace(self.ver, '').replace("[", "").replace("]", "").strip()
 
     @property
     def ver(self) -> str:
         try:
             return self.log.iloc[0, 0]
-        except AttributeError:
-            return '00.00.001'
+        except (KeyError, IndexError, Exception):
+            matches = re.findall(r'\s*\[\d+\.\d+\.\d+\]\s*', self.first_line)
+            try:
+                return matches[0].strip().replace("[", "").replace("]", "")
+            except (KeyError, IndexError, Exception):
+                raise SDDError(f'first line format error: "{self.first_line}"')
 
-    def write(self, **kwargs):
-        time = datetime.now().strftime('%Y-%m-%d %H%M%S')
-        text = rf"""{{\rtf1\ansi\deff0\uc1\ansicpg949\deftab720{{\fonttbl{{\f0\fnil\fcharset1 Arial;}}{{\f1\fnil\fcharset2 Wingdings;}}{{\f2\fnil\fcharset2 Symbol;}}}}{{\colortbl\red0\green0\blue0;\red255\green0\blue0;\red0\green128\blue0;\red0\green0\blue255;\red255\green255\blue0;\red255\green0\blue255;\red128\green0\blue128;\red128\green0\blue0;\red0\green255\blue0;\red0\green255\blue255;\red0\green128\blue128;\red0\green0\blue128;\red255\green255\blue255;\red192\green192\blue192;\red128\green128\blue128;\red0\green0\blue0;}}\wpprheadfoot1\paperw11906\paperh16838\margl567\margr624\margt850\margb850\headery720\footery720\endnhere\sectdefaultcl{{\*\generator WPTools_6.250;}}{{\*\userprops {{\propname oid}}\proptype30{{\staticval 040g1j9410g01q871c90dpcrfer3k}}
-{{\propname userid}}\proptype30{{\staticval {env.USERNAME}}}
-{{\propname filename}}\proptype30{{\staticval FunctionDefinition.rtf}}
-{{\propname createby}}\proptype30{{\staticval {kwargs.get('created_by', self.created_by)}}}
-{{\propname createdate}}\proptype30{{\staticval {kwargs.get('created_date', self.created_date)}}}
-{{\propname updateby}}\proptype30{{\staticval {env.USERNAME}}}
-{{\propname updatedate}}\proptype30{{\staticval {time}}}
-}}{{\plain\f0\fs20 %{self.model} [{kwargs.get('ver', '00.00.001')}]\par
-\pard\plain\plain\f0\fs20\par
-\plain\f0\fs20 {self._encode_rtf(kwargs.get('desc', "모델 설명 없음"))}\par
-\pard\plain\plain\f0\fs20\par
-\plain\f0\fs20\u9654 ?\u48320 ?\u44221 ?\u45236 ?\u50669 ?\par
-{kwargs.get('log', '\\plain\\f0\\fs20 [00.00.001] Initial Release\\par')}
-}}}}"""
-        self.content = self.decode_rtf(text)
-        with open(self.rtf, 'w', encoding="ansi") as f:
-            f.write(text)
-        return text
+    @property
+    def log(self) -> DataFrame:
+        if not hasattr(self, '_log'):
+            if (self.content.count("|") > 2) and not (
+                self.name.startswith('Can') or
+                self.name.startswith('EpmN') or
+                self.name.startswith('EpmIf')
+            ):
+                try:
+                    self.__setattr__('_log', self._find_log_by_table())
+                except SDDError:
+                    self.__setattr__('_log', self._find_log_by_regex())
+            else:
+                self.__setattr__('_log', self._find_log_by_regex())
+        return self.__getattribute__('_log')
 
-    def update(self, log:str):
-        newv = '00.00.001'
-        objs = []
-        for n, (v, l) in enumerate(self.log.itertuples(index=False)):
-            if not n:
-                vs = v.split(".")
-                newv = f"{'.'.join(vs[:-1])}.{str(int(vs[-1]) + 1).zfill(3)}"
-                objs.append(f"\\plain\\f0\\fs20 [{newv}] {self._encode_rtf(log)}\\par")
-            objs.append(f"\\plain\\f0\\fs20 [{v}] {self._encode_rtf(l)}\\par")
-        self.write(ver=newv, desc=self.desc, log="\n".join(objs))
+    @log.setter
+    def log(self, message:str):
+        parts = self.ver.split(".")
+        ver = '.'.join(parts[:-1] + [f'{int(parts[-1]) + 1}'.zfill(3)])
+        log = self.log.copy()
+        log.loc[len(log)] = [ver, message]
+        log.sort_values(by=['ver'], inplace=True, ascending=False, ignore_index=True)
+        self.__setattr__('_log', log)
         return
 
-    def commit(self):
-        file = zip(self.rtf.parent, outer=True, overwrite=True)
-        # TODO
-        return
+    @property
+    def description(self) -> str:
+        content = self.content[len(self.first_line) + 1:]
+        for v, c in self.log.itertuples(index=False):
+            content = content.replace(f'[{v}]', '').replace(v, '')
+            if '\n' in c:
+                for _c in c.splitlines():
+                    content = content.replace(_c.strip(), '').strip()
+            else:
+                content = content.replace(c, '').strip()
+        return '\n'.join(l for l in content.splitlines() if not '|' in l)
+
+    def __iter__(self):
+        for line in self._iter:
+            yield line.strip()
+
+    def __len__(self):
+        return len(self._iter)
+
+    def __str__(self):
+        return f'''name    : {self.name.rjust(len(self.ver))}
+version : {self.ver}
+author  : {self.created_by}
+created : {self.created_date}
+picture : {self.has_picture}'''
 
 
-if __name__ == "__main__":
-    # sdd = SddRW('CanFDCCUM', '040g00002u801po70cdg7unbg5e08')
-    sdd = SddRW('CatPrg', '040g030000001mo710404mgdpcd70')
-    # sdd = SddRW('CatSet', '040g030000001mo71050qdbcitv9u')
-    # sdd = SddRW('CatFMd', '040g030000001n870gcg3qb7l5ji2')
-    # sdd = SddRW('CanFDNEWM', '040g00002u801p12345678912345d', created_by=env.USERNAME, created_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    # print(sdd)
-    # print("-" * 100)
-    print(sdd.ver)
+
+if __name__ == '__main__':
+    from pandas import set_option
+    set_option('display.expand_frame_repr', False)
+
+    # import random
+    # root = r'E:\SVN\GSL_Build\7_notes-unzip'
+    #
+    # samples = random.sample(os.listdir(root), 10)
+    # for n, sample in enumerate(samples, start=1):
+    #     _src = os.path.join(root, sample)
+    #     print(n, _src, '-' * 50)
+    #     try:
+    #         sdd = SddRW(_src)
+    #     except (FileNotFoundError, SDDNotFoundError):
+    #         print("NOT FOUND")
+    #         continue
+    #     except SDDOutOfDateError:
+    #         print("OUT OF DATE")
+    #         continue
+    #
+    #     print(sdd)
+    #     print("CONTENT", "-" * 80)
+    #     print(sdd.content)
+    #     print("DESC", "-" * 80)
+    #     print(sdd.description)
+    #     print("LOG", "-" * 80)
+    #     print(sdd.log.to_string(index=False, justify='left'))
+    #     print("-" * 80)
+    #
+    #     sdd.log = "야아따 자동으로다가 SDD를 업데이트해브러~"
+    #     print(sdd)
+    #     print("NEW LOG", "-" * 80)
+    #     print(sdd.log.astype(str).to_string(index=False, justify='left'))
+    #     break
+
+    """
+    개별 SDD 확인 용
+    """
+    sdd = SddRW(r'C:\Users\Administrator\Downloads\cannect-test\hello world\sdd\변경 전\040g00002u801po71g9g7ti67io00')
+    print(sdd)
+    print(f"HAS PICTURE:", sdd.has_picture)
+    print("CONTENT", "-" * 80)
+    print(sdd.content)
+    print("DESC", "-" * 80)
+    print(sdd.description)
+    print("LOG", "-" * 80)
     print(sdd.log)
-    # print(sdd.desc)
-    # print(sdd.created_by, sdd.created_date)
-    # sdd.update("OBM 인증 대응")
-    # sdd.commit()
-    # print(sdd.ver)
-    # print(sdd.log)
+    print("-" * 80)
+    for v, c in sdd.log.itertuples(index=False):
+        print(f'-> {v}: {c}')
 
-
+    """
+    전체 SDD에서 오류 항목 찾기
+    """
+    # from tqdm.auto import tqdm
+    #
+    # loop = tqdm(os.listdir(root))
+    # for oid in loop:
+    #     if oid in ['040g030000001mo710eg5p6icjpja']:
+    #         continue
+    #     _src = os.path.join(root, oid)
+    #     try:
+    #         sdd = SddRW(_src)
+    #     except (SDDNotFoundError, SDDOutOfDateError):
+    #         continue
+    #
+    #     try:
+    #         loop.set_description(f'{oid}: {sdd.name}')
+    #         temp = f'{sdd} {sdd.log}'
+    #     except (SDDError, SDDLogError):
+    #         tools.unzip(
+    #             Path(r'E:\SVN\GSL_Build\7_Notes') / f'{oid}.zip',
+    #             Path(r'E:\SVN\GSL_Build\7_notes-error') / oid
+    #         )
