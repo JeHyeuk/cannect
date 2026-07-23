@@ -1,18 +1,18 @@
 """
 Engineering Build
-- SQLBaselineDB : SQL Server 베이스라인 DB 접근
-- PipelineEnv   : pipeline.env 파일 관리
-- _CGenPusher   : HNB_UNDEFINED.zip 압축 해제 + GitLab push
-- EngBuild      : 엔지니어링 빌드 메인 클래스 — 생성자 호출만으로 전 과정 완료
+- SQLBaselineDB  : SQL Server 베이스라인 DB 접근
+- PipelineEnv    : pipeline.env 파일 관리
+- _JenkinsTrigger: CGEN.zip → 공용 서버 복사 + Jenkins API 빌드 트리거
+- EngBuild       : 엔지니어링 빌드 메인 클래스 — 생성자 호출만으로 전 과정 완료
 """
 
 import shutil
-import subprocess
 import sys
-import zipfile
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+from urllib import request as urllib_request
+from urllib.error import URLError
+import base64
 
 try:
     import pyodbc
@@ -32,8 +32,11 @@ from .config import (
     A2L_OUTPUT_DIR,
     PIPELINE_ENV_FILENAME,
     ASCET_CGEN_ZIP,
-    GITLAB_LOCAL_REPO,
-    GITLAB_CGEN_SUBDIR,
+    JENKINS_URL,
+    JENKINS_JOB_NAME,
+    JENKINS_USER,
+    JENKINS_API_TOKEN,
+    SHARED_SERVER_BASE,
 )
 
 
@@ -117,7 +120,7 @@ class PipelineEnv:
             'VARIANT':        self.variant,
             'ASW_PROJECT':    self.rev_info['ASCET_Project'],
             'BSW_PLATFORM':   self.rev_info['BSW_Platform'],
-            'BSW_SRC_PATH':  self.rev_info['BSW_SrcPath'],
+            'BSW_SRC_PATH':   self.rev_info['BSW_SrcPath'],
             'ASW_REV':        str(self.rev_info['ASCET_Project_Rev']),
             'BSW_REV':        str(self.rev_info['BSW_Platform_Rev']),
             'BPM_REV':        str(self.rev_info['BPM_Rev']),
@@ -154,99 +157,86 @@ class PipelineEnv:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# _CGenPusher  (내부 전용 — 직접 import 불필요)
+# _JenkinsTrigger
 # ══════════════════════════════════════════════════════════════════════
 
-class _CGenPusher:
+class _JenkinsTrigger:
     """
-    ASCET CodeGen 결과물 GitLab Push
+    CGEN.zip → 공용 서버 복사 + Jenkins 빌드 API 호출
 
     흐름:
         1. HNB_UNDEFINED.zip 존재 확인
-        2. repo/cgen/ 초기화 후 zip 압축 해제
-        3. pipeline.env → repo 루트 복사
-        4. git add → commit → push
+        2. \\kefico\keti\ENT_Engine_mgt\Temp\Jenkins\{client_id}\CGEN.zip 으로 복사
+        3. Jenkins buildWithParameters API POST 호출
     """
 
-    def __init__(
-        self,
-        zip_path:    Optional[str] = None,
-        repo_path:   Optional[str] = None,
-        cgen_subdir: Optional[str] = None,
-    ):
-        self.zip_path  = Path(zip_path   or ASCET_CGEN_ZIP)
-        self.repo_path = Path(repo_path  or GITLAB_LOCAL_REPO)
-        self.cgen_dir  = self.repo_path / (cgen_subdir or GITLAB_CGEN_SUBDIR)
+    def __init__(self, client_id: str, variant: str, zip_path: Optional[str] = None):
+        self.client_id = client_id
+        self.variant   = variant
+        self.zip_src   = Path(zip_path or ASCET_CGEN_ZIP)
+        self.zip_dst   = Path(SHARED_SERVER_BASE) / client_id / "CGEN.zip"
 
-    def push(self, pipeline_env_path: Optional[Path] = None,
-             commit_msg: Optional[str] = None) -> None:
-
-        print(f"[CGenPusher] zip    : {self.zip_path}")
-        print(f"[CGenPusher] repo   : {self.repo_path}")
-        print(f"[CGenPusher] cgen/  : {self.cgen_dir}")
+    def trigger(self) -> None:
+        print(f"[JenkinsTrigger] zip 원본   : {self.zip_src}")
+        print(f"[JenkinsTrigger] 업로드 대상: {self.zip_dst}")
 
         self._validate()
-        self._extract_zip()
-
-        if pipeline_env_path is not None:
-            self._copy_pipeline_env(pipeline_env_path)
-
-        self._git_push(commit_msg or self._auto_commit_msg())
-        print("[CGenPusher] ✅ GitLab push 완료")
-
-    # ── 내부 헬퍼 ──────────────────────────────────────────────────
+        self._copy_zip()
+        self._call_jenkins()
 
     def _validate(self):
-        if not self.zip_path.exists():
+        if not self.zip_src.exists():
             raise FileNotFoundError(
-                f"[CGenPusher] zip 없음: {self.zip_path}"
-            )
-        if not self.repo_path.exists():
-            raise FileNotFoundError(
-                f"[CGenPusher] repo 경로 없음: {self.repo_path}"
-            )
-        if not (self.repo_path / ".git").exists():
-            raise EnvironmentError(
-                f"[CGenPusher] .git 없음 — git clone 경로인지 확인: {self.repo_path}"
+                f"[JenkinsTrigger] ASCET CodeGen zip 없음: {self.zip_src}\n"
+                f"  ASCET 6.1에서 코드젠을 먼저 실행해 주세요."
             )
 
-    def _extract_zip(self):
-        if self.cgen_dir.exists():
-            shutil.rmtree(self.cgen_dir)
-            print(f"[CGenPusher] 기존 cgen/ 삭제")
-        self.cgen_dir.mkdir(parents=True, exist_ok=True)
+    def _copy_zip(self):
+        self.zip_dst.parent.mkdir(parents=True, exist_ok=True)
+        print(f"[JenkinsTrigger] CGEN.zip 복사 중...")
+        shutil.copy2(self.zip_src, self.zip_dst)
+        print(f"[JenkinsTrigger] ✅ 복사 완료 → {self.zip_dst}")
 
-        print("[CGenPusher] zip 압축 해제 중...")
-        with zipfile.ZipFile(self.zip_path, "r") as zf:
-            zf.extractall(self.cgen_dir)
-        print(f"[CGenPusher] 압축 해제 완료 → {self.cgen_dir}")
+    def _call_jenkins(self):
+        url = (
+            f"{JENKINS_URL}/job/{JENKINS_JOB_NAME}/buildWithParameters"
+            f"?token={JENKINS_API_TOKEN}"
+            f"&VARIANT={self.variant}"
+            f"&EMP_ID={self.client_id}"
+        )
 
-    def _copy_pipeline_env(self, src: Path):
-        dst = self.repo_path / PIPELINE_ENV_FILENAME
-        shutil.copy2(src, dst)
-        print(f"[CGenPusher] pipeline.env 복사 → {dst}")
+        credentials = base64.b64encode(
+            f"{JENKINS_USER}:{JENKINS_API_TOKEN}".encode()
+        ).decode()
 
-    def _git_push(self, commit_msg: str):
-        for cmd in [
-            ["git", "add", "."],
-            ["git", "commit", "-m", commit_msg],
-            ["git", "push"],
-        ]:
-            print(f"[CGenPusher] $ {' '.join(cmd)}")
-            r = subprocess.run(
-                cmd, cwd=self.repo_path,
-                capture_output=True, text=True, encoding="utf-8",
+        req = urllib_request.Request(
+            url,
+            method="POST",
+            headers={
+                "Authorization": f"Basic {credentials}",
+                "Content-Type":  "application/x-www-form-urlencoded",
+            },
+        )
+
+        print(f"[JenkinsTrigger] Jenkins API 호출 중...")
+        print(f"[JenkinsTrigger] POST {JENKINS_URL}/job/{JENKINS_JOB_NAME}/buildWithParameters")
+        print(f"[JenkinsTrigger]   VARIANT={self.variant}, EMP_ID={self.client_id}")
+
+        try:
+            with urllib_request.urlopen(req, timeout=10) as resp:
+                status = resp.status
+        except URLError as e:
+            raise ConnectionError(
+                f"[JenkinsTrigger] Jenkins 연결 실패: {e}\n"
+                f"  Jenkins가 켜져있는지 확인하세요: {JENKINS_URL}"
             )
-            if r.stdout: print(r.stdout.strip())
-            if r.stderr: print(r.stderr.strip())
-            if r.returncode != 0 and "nothing to commit" not in (r.stdout + r.stderr):
-                raise RuntimeError(
-                    f"[CGenPusher] 명령 실패: {' '.join(cmd)}\n{r.stderr}"
-                )
 
-    @staticmethod
-    def _auto_commit_msg() -> str:
-        return f"[FACA] ASCET CodeGen push {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if status in (200, 201):
+            print(f"[JenkinsTrigger] ✅ Jenkins 빌드 트리거 성공 (HTTP {status})")
+        else:
+            raise RuntimeError(
+                f"[JenkinsTrigger] 예상치 못한 응답 코드: {status}"
+            )
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -256,30 +246,23 @@ class _CGenPusher:
 class EngBuild:
     """
     엔지니어링 빌드 메인 클래스
-
-    생성자 호출 한 번으로 전 과정 자동 완료:
-        DB 조회 → pipeline.env 생성 → zip 압축 해제 → GitLab push
-
-    Usage:
-        EngBuild("TX4T9MTN9LDT")
     """
 
-    def __init__(self, variant: str):
+    def __init__(self, variant: str, client_id: str):
         if not variant:
-            raise ValueError("베리언트명이 필요합니다")
+            raise ValueError("베리언트명이 필요합니다.")
+        if not client_id:
+            raise ValueError("사용자 ID(client_id)가 필요합니다.")
 
         self.variant      = variant
+        self.client_id    = client_id
         self.rev_info     = None
         self.pipeline_env = None
         self.env_file     = None
 
-        # ── 전 과정 자동 실행 ──
         self._run()
 
-    # ── Public (조회용) ──────────────────────────────────────────────
-
     def to_dict(self) -> Dict[str, str]:
-        """생성된 환경변수 딕셔너리 반환"""
         return self.pipeline_env.to_dict()
 
     def __repr__(self):
@@ -292,15 +275,11 @@ class EngBuild:
             f"BPM_REV={self.rev_info['BPM_Rev']})"
         )
 
-    # ── Private ─────────────────────────────────────────────────────
-
     def _run(self):
-        """DB 조회 → pipeline.env → GitLab push"""
-
         # 1) DB 조회
         print(f"[EngBuild] 베리언트: {self.variant}")
         print("[EngBuild] DB 조회 중...")
-        db = SQLBaselineDB()
+        db                = SQLBaselineDB()
         self.rev_info     = db.fetch_variant_rev(self.variant)
         self.pipeline_env = PipelineEnv(self.variant, self.rev_info)
         print(f"[EngBuild] ✅ {self}")
@@ -309,16 +288,20 @@ class EngBuild:
         self.env_file = self.pipeline_env.write()
         print(f"[EngBuild] pipeline.env 생성: {self.env_file}")
 
-        # 3) zip 해제 + GitLab push
-        pusher = _CGenPusher()
-        pusher.push(pipeline_env_path=self.env_file)
+        # 3) CGEN.zip 업로드 + Jenkins 트리거
+        trigger = _JenkinsTrigger(
+            client_id = self.client_id,
+            variant   = self.variant,
+        )
+        trigger.trigger()
+        print(f"[EngBuild] ✅ 완료 — Jenkins 빌드가 곧 시작됩니다.")
 
 
 # ── 직접 실행 테스트 ──────────────────────────────────────────────────
 
 if __name__ == "__main__":
     print("[INFO] EngBuild 테스트 시작...\n")
-    builder = EngBuild("TX4T9MTN9LDT")   # 한 줄로 전 과정 완료
+    builder = EngBuild("TX4T9MTN9LDT", client_id="22011113")
     print(f"\n[INFO] 환경변수:\n")
     for k, v in builder.to_dict().items():
         print(f"  {k}={v}")

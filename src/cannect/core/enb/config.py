@@ -3,7 +3,7 @@ Build 시스템 설정
 """
 
 # ══════════════════════════════════════════════════════════════════════
-# SQL Server 연결 설정
+# SQL Server
 # ══════════════════════════════════════════════════════════════════════
 SQL_SERVER   = r"10.224.59.18\ECD01\SQLEXPRESS,1433"
 SQL_DATABASE = "BaselineDB"
@@ -11,26 +11,27 @@ SQL_UID      = "Autron"
 SQL_PWD      = "Autr0n2017!"
 
 # ══════════════════════════════════════════════════════════════════════
-# Build 기본값
+# Build
 # ══════════════════════════════════════════════════════════════════════
-OFFICIAL_BUILD = False          # True = 공식 빌드 / False = 엔지니어링 빌드
-HEX_OUTPUT_DIR = r".\build"
-A2L_OUTPUT_DIR = r".\A2L"
-
-# ══════════════════════════════════════════════════════════════════════
-# Pipeline Env
-# ══════════════════════════════════════════════════════════════════════
+OFFICIAL_BUILD        = False   # True = 공식 빌드 / False = 엔지니어링 빌드
+HEX_OUTPUT_DIR        = r".\build"
+A2L_OUTPUT_DIR        = r".\build"
 PIPELINE_ENV_FILENAME = "pipeline.env"
 
 # ══════════════════════════════════════════════════════════════════════
-# ASCET CodeGen / GitLab 설정
+# ASCET CodeGen
 # ══════════════════════════════════════════════════════════════════════
-
-# ASCET CodeGen 결과 zip (경로 고정)
 ASCET_CGEN_ZIP = r"C:\ETAS\ASCET6.1\CGen\HNB_UNDEFINED.zip"
 
-# GitLab 로컬 클론 경로  ← 실제 경로로 수정 필요
-GITLAB_LOCAL_REPO = r"C:\dev\gitlab\kvhs"
+# ══════════════════════════════════════════════════════════════════════
+# Jenkins
+# ══════════════════════════════════════════════════════════════════════
+JENKINS_URL       = "http://10.224.58.83:8080"
+JENKINS_JOB_NAME  = "EMS_Prj"
+JENKINS_USER      = "DeukJoYang"
+JENKINS_API_TOKEN = "11927c193e3444fc8a50b84b42d1dd4f8d"   #
 
-# repo 내 CodeGen 소스를 올릴 서브디렉터리
-GITLAB_CGEN_SUBDIR = "cgen"
+# ══════════════════════════════════════════════════════════════════════
+# 회사 공용 서버 (CGEN.zip 업로드)
+# ══════════════════════════════════════════════════════════════════════
+SHARED_SERVER_BASE = r"\\kefico\keti\ENT_Engine_mgt\Temp\Jenkins"
