@@ -7,44 +7,43 @@ from xml.dom import minidom
 import os, zipfile, shutil, io, re, stat
 
 
-def unzip(src: Union[str, Path], to: Union[str, Path] = "") -> bool:
+def unzip(src: Union[str, Path], dst: Union[str, Path] = "") -> Path:
     """
     압축(.zip) 해제
     :param src: 압축파일 경로
-    :param to : [optional] 압축파일을 풀 경로
-    :return:
+    :param dst : [optional] 압축파일을 풀 경로
+    :return: 압축을 푼 경로
     """
-    if not to:
-        to = os.path.dirname(src)
-    else:
-        os.makedirs(to, exist_ok=True)
+    if not dst:
+        dst = Path(os.path.dirname(src))
+    dst = Path(dst)
+    dst.mkdir(parents=True, exist_ok=True)
 
     src = str(src)
-    # if not os.path.isfile(src):
-    #     raise KeyError(f"src: {src}는 경로가 포함된 파일(Full-Directory)이어야 합니다.")
     if src.endswith('.zip'):
         zip_obj = zipfile.ZipFile(src)
-        zip_obj.extractall(to)
-    # elif src.endswith('.7z'):
-    #     with py7zr.SevenZipFile(src, 'r') as arc:
-    #         arc.extractall(path=to)
+        zip_obj.extractall(dst)
     else:
-        # raise KeyError(f"src: {src}는 .zip 또는 .7z 압축 파일만 입력할 수 있습니다.")
         raise KeyError(f"src: {src}는 .zip 압축 파일만 입력할 수 있습니다.")
-    return True
 
-def zip(path:Union[str, Path], outer:bool=False, overwrite:bool=False):
+    return dst
+
+def zip(
+    path:Union[str, Path],
+    save_as:Union[str, Path]=None,
+    overwrite:bool=False
+):
     path = Path(path)
     name = path.name
-    if outer:
-        path = path.parent
-    if overwrite and (path / f'{name}.zip').exists():
-        os.remove(path / f'{name}.zip')
+    if save_as is None:
+        save_as = path
+    if overwrite and (save_as / f'{name}.zip').exists():
+        os.remove(save_as / f'{name}.zip')
     shutil.make_archive(name, "zip", root_dir=path)
-    shutil.move(f'{name}.zip', path)
-    return path / f'{name}.zip'
+    shutil.move(f'{name}.zip', save_as)
+    return save_as / f'{name}.zip'
 
-def copy_to(src:Union[str, Path], dst:Union[str, Path]) -> str:
+def copy_to(src:Union[str, Path], dst:Union[str, Path]) -> Path:
     if os.path.isfile(str(src)):
         os.chmod(dst, stat.S_IWRITE)
         os.chmod(src, stat.S_IWRITE)
@@ -55,17 +54,23 @@ def copy_to(src:Union[str, Path], dst:Union[str, Path]) -> str:
     #     shutil.copy(file, dst)
     # else:
     #     shutil.move(file, dst)
-    return os.path.join(dst, os.path.basename(src))
+    return Path(os.path.join(dst, os.path.basename(src)))
 
-def find_file(root:Union[str, Path], filename:Union[str, Path]) -> Union[str, List[str]]:
+def find_file(root:Union[str, Path], filename:Union[str, Path]) -> Union[Path, List[Path]]:
     """
     @filename: 확장자까지 포함한 단일 파일 이름
     """
     found = []
-    for _root, _dir, _files in os.walk(root):
-        for _file in _files:
-            if _file == filename:
-                found.append(os.path.join(_root, _file))
+    for _root, _dirs, _files in os.walk(root):
+        _root = Path(_root)
+        if "." in filename:
+            for _file in _files:
+                if _file == filename:
+                    found.append(_root / _file)
+        else:
+            for _dir in _dirs:
+                if _dir == filename:
+                    found.append(_root / _dir)
     if not found:
         raise FileNotFoundError(Path(root) / filename)
     if len(found) == 1:
@@ -227,4 +232,6 @@ def compare_dataframe(x:DataFrame, y:DataFrame) -> DataFrame:
 
 
 if __name__ == "__main__":
-    print("test\vhello")
+    abc = [1, 2, 3]
+    for n in abc:
+        print(n, next([m for m in abc]))

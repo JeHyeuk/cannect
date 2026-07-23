@@ -6,7 +6,7 @@ __all__ = [
     "Ascet",
     "AscetCAN", "DataBaseCAN", "NamingRule", "TestCaseCAN",
     "CodeBeamer",
-    "IntegrationRequest", "ChangeHistoryManager",
+    "IntegrationRequest", "ChangeHistoryManager", "SourceControl",
     "SubVersion",
     "TestCase", "TestCasePlot", "TestCaseUnit",
     "EngBuild",

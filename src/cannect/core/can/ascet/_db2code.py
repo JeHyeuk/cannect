@@ -447,16 +447,12 @@ cntvld( &{names.messageCountValid}, &{names.messageCountTimer}, {names.counter},
  SEND TYPE\t\t: {send_type[self["Send Type"]]}
  CHANNEL\t\t\t: {self["Channel"]}-CAN
 -------------------------------------------------- */"""
-        # if self["SystemConstant"]:
-        #     syntax += f"\n#if ( {self['SystemConstant']} )"
-        # if self["Codeword"]:
-        #     syntax += f"\nif ( {self['Codeword']} ) {{"
-        #     i += 1
+        if "Cfg_CanSTDDB_C" in self["Codeword"]:
+            syntax += f"\nif ( {self['Codeword']} ) {{"
+            i += 1
         syntax += f"\n{tab * i}{model.upper()}_IMPL__{self['Message']}();\n"
-        # if self["Codeword"]:
-        #     syntax += f"}}\n"
-        # if self["SystemConstant"]:
-        #     syntax += f"#endif\n"
+        if "Cfg_CanSTDDB_C" in self["Codeword"]:
+            syntax += f"}}\n"
         return syntax
 
     @classmethod

@@ -116,10 +116,56 @@ class SubVersion(Path):
         return self._command(["update", self.as_posix()])
 
     def commit(self, message: str):
-        return self._command(["commit", "-m", f'"{message}"', self.as_posix()])
+        return self._command(["commit", "-m", f'{message}', self.as_posix()])
 
     def add(self):
-        return self._command(["add", "--parents", self.as_posix()])
+        """
+        대상 경로(파일 또는 디렉터리)를 SVN add.
+        - 버전관리되지 않은 부모 디렉터리가 있을 경우 상위부터 순차 add.
+        - cwd 기준 상대경로를 사용하여 SVN 경로 해석 오류 방지.
+        """
+        # SVN 루트(working copy root)를 찾아 unversioned 부모를 수집
+        unversioned: list[Path] = []
+        target: Path = self if self.is_dir() else self.parent
+
+        # 현재 경로부터 상위로 올라가며 버전관리 여부 확인
+        cursor = target
+        while True:
+            try:
+                # info 명령이 성공하면 해당 경로는 이미 버전관리 중
+                self.__class__(cursor)._command(["info", cursor.as_posix()])
+                break
+            except Exception:
+                unversioned.append(cursor)
+                parent = cursor.parent
+                if parent == cursor:
+                    # 파일시스템 루트까지 왔는데도 WC를 못 찾은 경우
+                    raise Exception(
+                        f"No SVN working copy found for: {self}"
+                    )
+                cursor = parent
+
+        # unversioned 목록을 상위→하위 순으로 add
+        for path in reversed(unversioned):
+            self._command(["add", "--depth", "empty", path.as_posix()])
+
+        # 최종 대상(파일 or 디렉터리) add
+        # 디렉터리인 경우 이미 위에서 처리됐을 수 있으므로 중복 방지
+        if self not in unversioned:
+            self._command(["add", self.as_posix()])
+        return
+
+    def is_version_controlled(self) -> bool:
+        """
+        해당 경로가 SVN 버전관리 대상인지 여부를 반환.
+        - svn info 명령 성공 여부로 판단 (가장 빠르고 정확한 방법)
+        - 존재하지 않는 경로, unversioned 항목 모두 False 반환
+        """
+        try:
+            self._command(["info", self.as_posix()])
+            return True
+        except Exception:
+            return False
 
     def log(self, limit: int = 10) -> pd.DataFrame:
         xml_content = self._command(["log", "--xml", "-l", str(limit), self.as_posix()])
@@ -198,3 +244,6 @@ if __name__ == "__main__":
     # print(SVN.MODEL['CanFDCCUM.zip'].log())
     # res = SVN.CAN['자체제어기_KEFICO-EMS_고속CAN.xlsx'].commit('[JEHYEUK.LEE]')
     # print(res)
+
+    df = SVN.HISTORY.inventory
+    print(df[df['kind'] == 'file'].sort_values(by=['date'], ascending=False))

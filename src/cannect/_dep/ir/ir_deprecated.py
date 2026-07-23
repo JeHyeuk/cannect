@@ -1,7 +1,7 @@
 from cannect.config import env
 from cannect.core.ascet import Amd, WorkspaceIO
 from cannect.core.ir.delivereables import Deliverables
-from cannect.core.ir.sdd import SddRW
+from cannect.core.ir.sdd_deprecated2 import SddRW
 from cannect.core.ir.diff import AmdDiff
 from cannect.core.subversion import Subversion
 from cannect.errors import SVNError

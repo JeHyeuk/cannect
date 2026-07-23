@@ -25,10 +25,6 @@ class CANDiag(Amd):
         base = Amd(base_model)
 
         engine_spec = "HEV" if base.name.endswith("_HEV") or base.name.endswith("_G") else "ICE"
-        exclude_ecus = ["EMS", "CVVD", "MHSG", "NOx"]
-        if engine_spec == "ICE":
-            exclude_ecus += ["BMS", "LDC"]
-        db = db[~db["ECU"].isin(exclude_ecus)]
 
         if not db.is_developer_mode():
             db.to_developer_mode(engine_spec)
