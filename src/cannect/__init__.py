@@ -25,7 +25,7 @@ from cannect.core import ascet as Ascet
 from cannect.core.can import AscetCAN, DataBaseCAN, TestCaseCAN, NamingRule
 from cannect.core.codebeamer import CodeBeamer
 from cannect.core.enb import EngBuild
-from cannect.core.ir import IntegrationRequest, ChangeHistoryManager
+from cannect.core.ir import IntegrationRequest, ChangeHistoryManager, SourceControl
 from cannect.core.subversion import SubVersion
 from cannect.core.testcase import TestCase, TestCasePlot, TestCaseUnit
 from cannect.schema import DataDictionary, DataDict

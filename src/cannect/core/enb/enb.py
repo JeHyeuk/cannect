@@ -22,7 +22,7 @@ except ModuleNotFoundError as exc:
 else:
     _PYODBC_IMPORT_ERROR = None
 
-from .config import (
+from cannect.core.enb.config import (
     SQL_SERVER,
     SQL_DATABASE,
     SQL_UID,
@@ -161,7 +161,7 @@ class PipelineEnv:
 # ══════════════════════════════════════════════════════════════════════
 
 class _JenkinsTrigger:
-    """
+    r"""
     CGEN.zip → 공용 서버 복사 + Jenkins 빌드 API 호출
 
     흐름:

@@ -219,7 +219,6 @@ class SddRW:
 
     def commit(self):
         file = zip(self.rtf.parent, outer=True, overwrite=True)
-        # TODO
         return
 
 
