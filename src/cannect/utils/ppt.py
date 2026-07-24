@@ -4,41 +4,6 @@ import win32com.client as win32
 import os
 
 
-# def add_OLE(
-#     ppt_win32,
-#     obj:str,
-#     slide:int=1,
-#     left:int=475,
-#     top:int=192,
-#     width:int=100,
-#     height:int=100,
-#     close:bool=True,
-# ):
-#     slide = ppt_win32.Slides.Item(slide)
-#
-#     # 아이콘으로 표시 여부 / 링크 여부
-#     display_as_icon = True
-#     link = False  # True면 링크, False면 프레젠테이션에 임베드
-#
-#     # AddOLEObject (파일 확장자에 따라 ProgID 자동 판단; 명시 가능)
-#     shape = slide.Shapes.AddOLEObject(
-#         Left=left, Top=top, Width=width, Height=height,
-#         ClassName="",  # 예: "Excel.Sheet.12" (Office 2007+)
-#         FileName=obj,
-#         DisplayAsIcon=display_as_icon,
-#         IconFileName=" ",  # 아이콘 파일 지정 가능(생략 시 기본)
-#         IconIndex=0,
-#         # IconLabel=os.path.basename(obj),
-#         IconLabel='',
-#         Link=link
-#     )
-#
-#     if close:
-#         ppt_win32.SaveAs(ppt_path)
-#         ppt_win32.close()
-#     return
-
-
 class PptRW:
 
     app = None
@@ -70,8 +35,8 @@ class PptRW:
     def close(self):
         self.ppt.Save()
         self.ppt.Close()
-        if self.app_close:
-            self.app.Quit()
+        # if self.app_close:
+        #     self.app.Quit()
         return
 
     def get_slide_n(self, title:str) -> List:

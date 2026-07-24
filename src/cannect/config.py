@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     def CB_AUTH(self) -> Path:
         return Path(__file__).absolute().parent / '.cb-auth.json'
 
+    @computed_field
+    @property
+    def BASELINE_PATH(self) -> Path:
+        return Path(r'\\kefico\keti\ENT_Engine_mgt\01_EMS_SW')
+
     def __getitem__(self, item):
         return self.__getattribute__(item)
 

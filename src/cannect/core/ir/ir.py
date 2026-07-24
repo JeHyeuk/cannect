@@ -2,7 +2,7 @@ from cannect.config import env
 from cannect.core.ascet import Amd
 from cannect.core.ir.diff import AmdDiff
 from cannect.core.ir.sdd import SddRW
-from cannect.core.ir.sourcecontrol import SourceControl, is_same
+from cannect.core.ir.sourcecontrol import SourceControl, Compare
 from cannect.core.subversion import SubVersion
 from cannect.errors import (
     IRFormatError,
@@ -210,18 +210,17 @@ class IntegrationRequest:
         :return:
         """
         def _interface(s:Path, f:Path, l:str) -> str:
+            try:
+                if Compare(s, f):
+                    return f'skipped for commit: {f.name} is not modified'
+            except FileNotFoundError:
+                pass
+
             if f.exists():
                 os.chmod(f, stat.S_IWRITE | stat.S_IREAD)
                 f.unlink()
 
             f = SubVersion(tools.copy_to(s, f.parent))
-
-            try:
-                if is_same(s, f):
-                    return f'skipped for commit: {f.name} is not modified'
-            except ValueError:
-                pass
-
             if not f.is_version_controlled():
                 f.add()
             return f.commit(l)
@@ -242,6 +241,7 @@ class IntegrationRequest:
                 ('sdd', "SDDName"),
                 ('ps', "PolyspaceName")
             ]:
+
                 if key in exceptions:
                     # 사용자가 commit을 원하지 않는 항목은 제외
                     continue
@@ -254,9 +254,10 @@ class IntegrationRequest:
 
                 if len(_src) > 1:
                     raise IRFormatError(f'"{md}" -> {col} is duplicated\n{_src.to_string(index=False)}')
-
                 commit_log = log
                 if key == 'ps':
+                    if not self.data.loc[md, "SCMRev"]:
+                        self.sync()
                     commit_log = (f'Module : {md}\n'
                                   f'Revision : {self.data.loc[md, "SCMRev"]}\n'
                                   f'Version : {self.data.loc[md, "FunctionVersion"]}\n'
@@ -411,7 +412,7 @@ if __name__ == "__main__":
     from cannect.core.codebeamer import cb_tester
     import asyncio
 
-    cb = asyncio.run(cb_tester(19651261))
+    cb = asyncio.run(cb_tester(21021985))
     name, flag = '', False
     for char in cb.summary:
         if char == '[':
@@ -446,9 +447,10 @@ if __name__ == "__main__":
     # ir.meta.user = env.USERNAME
     # ir.base(1)
     # ir.sdd_update()
-    ir.sync()
-    # print(ir.commit(exceptions=['conf', 'ir', 'model', 'ps', 'sdd']))
-    ir.write()
+    # ir.sync()
+    # print(ir.commit())
+    print(ir.commit(exceptions=['conf', 'ir', 'model', 'sdd']))
+    # ir.write()
 
     # print(ir.meta)
     # print(ir.sc.dst)

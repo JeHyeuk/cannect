@@ -302,267 +302,134 @@ class SourceControl:
         return items
 
 
-# SVN commit 전 개발자 산출물과 SVN 소스 비교 목적 함수
-# written by Claud sonnect 4.6
+class Compare:
 
+    @classmethod
+    def raw(cls, src1:Path, src2:Path):
+        return src1.read_bytes() == src2.read_bytes()
 
-# ──────────────────────────────────────────────
-# 1. XML 비교
-# ──────────────────────────────────────────────
-def _normalize_xml(path: Path) -> etree._Element:
-    """XML을 파싱하고 정규화(속성 정렬, 공백 제거)하여 Element 반환."""
-    parser = etree.XMLParser(remove_blank_text=True, remove_comments=False)
-    tree = etree.parse(str(path), parser)
-    root = tree.getroot()
-    _sort_attributes(root)
-    return root
+    @classmethod
+    def raw_text(cls, src1:Path, src2:Path, encoding:str='utf-8'):
+        return src1.read_text(encoding=encoding) == src2.read_text(encoding=encoding)
 
+    @classmethod
+    def detect_zip_subtype(cls, src: Path) -> str:
+        """
+        ZIP 파일 내부를 최소 탐색하여 서브타입 결정.
+          - 'xml' : .xml 파일이 존재
+          - 'rtf' : .rtf 파일이 존재 (nested 포함)
+          - 'unknown'
+        """
+        with zipfile.ZipFile(src, "r") as zf:
+            for info in zf.infolist():
+                name_lower = info.filename.lower()
+                if name_lower.endswith('.amd'):
+                    return "amd"
+                if name_lower.endswith(".rtf"):
+                    return "rtf"
+        raise TypeError(f'"{src}" is not a valid file to compare')
 
-def _sort_attributes(element: etree._Element):
-    """재귀적으로 모든 요소의 속성을 키 기준 정렬 (원시 데이터 소스 단위 비교)."""
-    attrib = dict(sorted(element.attrib.items()))
-    element.attrib.clear()
-    element.attrib.update(attrib)
-    for child in element:
-        _sort_attributes(child)
+    @classmethod
+    def read_file_from_archive(cls, archive_path: str | Path, target_ext: str) -> bytes:
+        """
+        압축 파일(.zip / .7z) 안에서 특정 확장자 파일 하나를 찾아 bytes로 반환.
 
+        Args:
+            archive_path : 압축 파일 경로
+            target_ext   : 찾을 확장자 (예: ".csv", ".json", ".txt")
 
-def _elements_equal(e1: etree._Element, e2: etree._Element) -> bool:
-    """두 XML Element를 재귀적으로 비교."""
-    if e1.tag != e2.tag:
-        return False
-    if (e1.text or "").strip() != (e2.text or "").strip():
-        return False
-    if (e1.tail or "").strip() != (e2.tail or "").strip():
-        return False
-    if dict(e1.attrib) != dict(e2.attrib):
-        return False
-    if len(e1) != len(e2):
-        return False
-    return all(_elements_equal(c1, c2) for c1, c2 in zip(e1, e2))
+        Returns:
+            해당 파일의 bytes 데이터
 
+        Raises:
+            FileNotFoundError : 해당 확장자 파일이 없을 때
+            ImportError       : .7z인데 py7zr 미설치 시
+        """
+        archive_path = Path(archive_path)
+        target_ext = target_ext.lower()
+        suffix = archive_path.suffix.lower()
 
-def _compare_xml(src1: Path, src2: Path) -> bool:
-    """XML 파일 원시 데이터 소스 단위 비교."""
-    try:
-        root1 = _normalize_xml(src1)
-        root2 = _normalize_xml(src2)
-        return _elements_equal(root1, root2)
-    except etree.XMLSyntaxError:
-        return False
+        # ── .zip ────────────────────────────────────────────────
+        if suffix == ".zip":
+            with zipfile.ZipFile(archive_path, "r") as zf:
+                matched = [
+                    name for name in zf.namelist()
+                    if Path(name).name.endswith(target_ext)
+                ]
+                if not matched:
+                    raise FileNotFoundError(
+                        f"[ZIP] '{target_ext}' 파일을 찾을 수 없습니다."
+                    )
+                # 첫 번째 매칭 파일을 메모리에서 읽기
+                return zf.read(matched[0])
 
+        # ── .7z ─────────────────────────────────────────────────
+        elif suffix == ".7z":
+            with py7zr.SevenZipFile(archive_path, mode="r") as sz:
+                all_names = sz.getnames()
+                matched = [
+                    name for name in all_names
+                    if Path(name).name.endswith(target_ext)
+                ]
+                if not matched:
+                    raise FileNotFoundError(
+                        f"[7Z] '{target_ext}' 파일을 찾을 수 없습니다."
+                    )
+                # 특정 파일만 선택적으로 읽기
+                extracted = sz.read([matched[0]])
+                bio = extracted[matched[0]]
+                return bio.read()
 
-# ──────────────────────────────────────────────
-# 2. ZIP (XML 묶음) 비교
-# ──────────────────────────────────────────────
-def _read_zip_xml_contents(zf: zipfile.ZipFile) -> dict[str, etree._Element]:
-    """ZIP 내 .xml 파일을 이름→정규화 Element 딕셔너리로 반환."""
-    result = {}
-    parser = etree.XMLParser(remove_blank_text=True, remove_comments=False)
-    for info in zf.infolist():
-        if (info.filename.endswith(".xml") or info.filename.endswith(".amd")) and not info.is_dir():
-            with zf.open(info) as f:
-                root = etree.parse(f, parser).getroot()
-                _sort_attributes(root)
-                result[info.filename] = root
-    return result
-
-
-def _compare_zip_xml(src1: Path, src2: Path) -> bool:
-    """ZIP(XML 묶음) 내용물 비교."""
-    with zipfile.ZipFile(src1, "r") as zf1, zipfile.ZipFile(src2, "r") as zf2:
-        contents1 = _read_zip_xml_contents(zf1)
-        contents2 = _read_zip_xml_contents(zf2)
-
-        if set(contents1.keys()) != set(contents2.keys()):
-            return False
-
-        return all(
-            _elements_equal(contents1[name], contents2[name])
-            for name in contents1
-        )
-
-
-# ──────────────────────────────────────────────
-# 3. ZIP (Nested RTF 묶음) 비교
-# ──────────────────────────────────────────────
-_RTF_STRIP_RE = re.compile(
-    r"\\[a-z]+\d*\s?|[{}]|\\\n|\\\r",
-    re.IGNORECASE,
-)
-
-
-def _normalize_rtf(raw: bytes) -> str:
-    """RTF 바이트에서 제어어·구조 문자를 제거한 평문 반환."""
-    text = raw.decode("latin-1", errors="replace")
-    text = _RTF_STRIP_RE.sub("", text)
-    return " ".join(text.split())  # 연속 공백 통일
-
-
-def _read_zip_rtf_contents(zf: zipfile.ZipFile) -> dict[str, str]:
-    """ZIP 내 .rtf 파일을 이름→정규화 평문 딕셔너리로 반환."""
-    result = {}
-    for info in zf.infolist():
-        if info.filename.lower().endswith(".rtf") and not info.is_dir():
-            with zf.open(info) as f:
-                result[info.filename] = _normalize_rtf(f.read())
-    return result
-
-
-def _compare_zip_rtf(src1: Path, src2: Path) -> bool:
-    """ZIP(Nested RTF 묶음) 내용물 비교."""
-    with zipfile.ZipFile(src1, "r") as zf1, zipfile.ZipFile(src2, "r") as zf2:
-        contents1 = _read_zip_rtf_contents(zf1)
-        contents2 = _read_zip_rtf_contents(zf2)
-
-        if set(contents1.keys()) != set(contents2.keys()):
-            return False
-
-        return all(
-            contents1[name] == contents2[name]
-            for name in contents1
-        )
-
-
-def _detect_zip_subtype(src: Path) -> str:
-    """
-    ZIP 파일 내부를 최소 탐색하여 서브타입 결정.
-      - 'xml' : .xml 파일이 존재
-      - 'rtf' : .rtf 파일이 존재 (nested 포함)
-      - 'unknown'
-    """
-    with zipfile.ZipFile(src, "r") as zf:
-        for info in zf.infolist():
-            name_lower = info.filename.lower()
-            if name_lower.endswith(".xml") or name_lower.endswith('.amd'):
-                return "xml"
-            if name_lower.endswith(".rtf"):
-                return "rtf"
-    return "unknown"
-
-
-# ──────────────────────────────────────────────
-# 4. 7Z (Polyspace .log 비교)
-# ──────────────────────────────────────────────
-_PS_IGNORE_RE = re.compile(
-    r"^\s*(?:"
-    r"Date\s*:|"
-    r"Time\s*:|"
-    r"Elapsed\s*time|"
-    r"Analysis\s*started|"
-    r"Analysis\s*ended|"
-    r"Host\s*:|"
-    r"Version\s*:"
-    r")",
-    re.IGNORECASE,
-)
-
-
-def _normalize_log_lines(raw: bytes) -> list[str]:
-    """
-    .log 바이트를 줄 단위로 읽어 정규화된 줄 목록 반환.
-    - 타임스탬프·호스트 등 환경 의존 줄 제거
-    - 선행/후행 공백 제거, 빈 줄 제거
-    """
-    lines = []
-    for raw_line in raw.splitlines():
-        line = raw_line.decode("utf-8", errors="replace").strip()
-        if not line:
-            continue
-        if _PS_IGNORE_RE.match(line):
-            continue
-        lines.append(line)
-    return lines
-
-
-def _read_7z_log_contents(path: Path) -> dict[str, list[str]]:
-    """7z 아카이브 내 .log 파일을 이름→정규화 줄 목록 딕셔너리로 반환."""
-    result = {}
-    with py7zr.SevenZipFile(str(path), mode="r") as archive:
-        all_files = archive.getnames()
-        log_files = [f for f in all_files if f.lower().endswith(".log")]
-
-        if not log_files:
-            return result
-
-        extracted = archive.read(targets=log_files)  # {name: BytesIO}
-        for name, bio in extracted.items():
-            result[name] = _normalize_log_lines(bio.read())
-    return result
-
-
-def _compare_7z_log(src1: Path, src2: Path) -> bool:
-    """7z 내 .log 파일만 추출하여 내용 비교."""
-    contents1 = _read_7z_log_contents(src1)
-    contents2 = _read_7z_log_contents(src2)
-
-    if set(contents1.keys()) != set(contents2.keys()):
-        return False
-
-    return all(
-        contents1[name] == contents2[name]
-        for name in contents1
-    )
-
-
-# ══════════════════════════════════════════════
-# MASTER FUNCTION
-# ══════════════════════════════════════════════
-def is_same(src1: Path, src2: Path) -> bool:
-    """
-    두 파일이 논리적으로 동일한지 비교하는 마스터 함수.
-
-    지원 형식:
-      .xml        → XML 원시 데이터 소스 단위 비교
-      .zip (XML)  → 내부 .xml 파일 내용 비교
-      .zip (RTF)  → 내부 .rtf 파일 정규화 텍스트 비교
-      .7z         → 내부 .log 파일만 추출하여 비교
-
-    Parameters
-    ----------
-    src1, src2 : Path
-        비교할 두 파일의 경로
-
-    Returns
-    -------
-    bool
-        두 파일이 동일하면 True, 다르면 False
-    """
-    src1, src2 = Path(src1), Path(src2)
-
-    if not src1.exists() or not src2.exists():
-        raise FileNotFoundError(f"파일을 찾을 수 없습니다: {src1}, {src2}")
-
-    suffix = src1.suffix.lower()
-
-    if suffix == ".xml":
-        return _compare_xml(src1, src2)
-
-    if suffix == ".zip":
-        subtype = _detect_zip_subtype(src1)
-        if subtype == "xml":
-            return _compare_zip_xml(src1, src2)
-        elif subtype == "rtf":
-            return _compare_zip_rtf(src1, src2)
         else:
-            raise ValueError(f"지원하지 않는 ZIP 서브타입: {src1}")
+            raise ValueError(f"지원하지 않는 형식입니다: {suffix}")
 
-    if suffix == ".7z":
-        return _compare_7z_log(src1, src2)
 
-    raise ValueError(f"지원하지 않는 파일 형식: {suffix}")
+    def __init__(self, src1: Path, src2: Path):
+        self.src1, self.src2 = src1, src2 = Path(src1), Path(src2)
+
+        __same__ = False
+        if not src1.exists() or not src2.exists():
+            raise FileNotFoundError(src1, src2)
+
+        if src1.suffix.lower() == '.xml':
+            __same__ = self.raw(src1, src2)
+        elif src1.suffix.lower() == '.zip':
+            subtype = self.detect_zip_subtype(src1)
+            if subtype == 'amd':
+                byte1 = self.read_file_from_archive(src1, '.main.amd')
+                byte2 = self.read_file_from_archive(src2, '.main.amd')
+            elif subtype == 'rtf':
+                byte1 = self.read_file_from_archive(src1, 'FunctionDefinition.rtf')
+                byte2 = self.read_file_from_archive(src2, 'FunctionDefinition.rtf')
+            else:
+                raise TypeError()
+            __same__ = byte1 == byte2
+        elif src1.suffix.lower() == '.7z':
+            byte1 = self.read_file_from_archive(src1, '.log')
+            byte2 = self.read_file_from_archive(src2, '.log')
+            __same__ = byte1 == byte2
+        else:
+            raise TypeError(f'"{src1}" is not a valid file to compare')
+
+        self.__same__ = __same__
+        return
+
+    def __bool__(self):
+        return self.__same__
+
+    def __str__(self):
+        return str(self.__same__)
+
+
 
 
 if __name__ == "__main__":
     from pandas import set_option
     set_option('display.expand_frame_repr', False)
 
-    # print(is_same(
-    #     src1=r'E:\SVN\model\ascet\trunk\HNB_GASOLINE\_29_CommunicationVehicle\LIN\Diagnosis\LinD\LinD-22986.zip',
-    #     src2=r'E:\SVN\model\ascet\trunk\HNB_GASOLINE\_29_CommunicationVehicle\LIN\Diagnosis\LinD\LinD-22767.zip'
-    # ))
 
-
-    sc = SourceControl(r'\\kefico\keti\ENT\SDT\EMS_Tool\cannect\cloud\22011148\ir\EMS_IsgWarning 신호 조건 중 자동변속기에 CVT 추가')
-    # print(sc.get_items(sc.dst.root))
-    # print(sc)
+    compare = Compare(
+        r'E:\SVN\model\ascet\trunk\HNB_GASOLINE\_29_CommunicationVehicle\LIN\Diagnosis\LinD\LinD-22767.zip',
+        r'E:\SVN\model\ascet\trunk\HNB_GASOLINE\_29_CommunicationVehicle\LIN\Diagnosis\LinD\LinD-22986.zip'
+    )
+    print(compare)
